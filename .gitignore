@@ -1,0 +1,10 @@
+.venv
+subalignerenv
+src/search/reset_and_rebuild.py
+data/
+deprecated/
+src/search/__pycache__/
+src/search/rebuild_dialog_db.py
+config/app_config.yaml
+config/logging.yaml
+**/__pycache__/
