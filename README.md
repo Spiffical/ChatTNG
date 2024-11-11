@@ -2,6 +2,18 @@
 
 This system extracts dialog clips from Star Trek: The Next Generation episodes by matching script text with subtitle timings, and creates an interactive dialog system powered by OpenAI's GPT models, allowing you to chat directly with the characters of Star Trek: The Next Generation.
 
+## Table of Contents
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Data Preparation](#data-preparation)
+- [Processing Pipeline](#processing-pipeline)
+- [Running the System](#running-the-system)
+- [How Character Chat Works](#how-character-chat-works)
+- [Testing](#testing)
+- [Project Structure](#project-structure)
+- [Notes](#notes)
+- [Troubleshooting](#troubleshooting)
+
 ## Prerequisites
 
 - Python 3.8+
@@ -96,6 +108,32 @@ python src/main.py --config config/app_config.yaml --mode auto_dialog
 The system supports two modes:
 - `interactive`: Chat with the system using Star Trek dialog
 - `auto_dialog`: Watch the system have conversations with itself
+
+## How Character Chat Works
+
+The ChatTNG system uses a sophisticated combination of technologies to create natural conversations with Star Trek: TNG characters:
+
+### Dialog Processing
+1. **Dialog Extraction**: The system extracts dialog from episodes by matching script text with subtitle timings (see `src/extraction/dialog_matcher.py`).
+2. **Vector Database**: Dialogs are stored in ChromaDB with OpenAI embeddings, enabling semantic search capabilities.
+3. **Character Detection**: The system automatically detects which character should respond based on context and conversation flow.
+
+### Conversation Flow
+1. When you input text, the system:
+   - Detects if a specific character should respond
+   - Generates a contextually appropriate response using GPT-4
+   - Searches the vector database for similar actual show dialog
+   - Selects the best matching dialog and plays the corresponding video clip
+
+### Technical Components
+- **Semantic Search**: Uses OpenAI's text-embedding-3-small model for creating and matching dialog embeddings
+- **Context Management**: Maintains conversation history for more coherent exchanges
+- **Character Consistency**: Filters responses based on character-specific dialog patterns
+- **Dialog Deduplication**: Prevents repetition by tracking used dialogs
+
+### Modes
+- **Interactive Mode**: Direct conversations with characters
+- **Auto-Dialog**: Watch the system have conversations with itself using actual show dialog
 
 ## Testing
 
