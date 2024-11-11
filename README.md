@@ -5,9 +5,9 @@ This system extracts dialog clips from Star Trek: The Next Generation episodes b
 ## Prerequisites
 
 - Python 3.8+
-- FFmpeg
-- MPV player
-- OpenAI API key
+- [FFmpeg](https://ffmpeg.org/)
+- [MPV player](https://mpv.io/)
+- [OpenAI API key](https://platform.openai.com/api-keys)
 - [Alass](https://github.com/kaegi/alass) subtitle synchronization tool
 - Video files, subtitles, and episode scripts for Star Trek: TNG
 
@@ -16,8 +16,8 @@ This system extracts dialog clips from Star Trek: The Next Generation episodes b
 1. Clone the repository and create a virtual environment:
 
 ```bash
-git clone <repository-url>
-cd star-trek-dialog-system
+git clone git@github.com:Spiffical/ChatTNG.git
+cd ChatTNG
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
@@ -30,8 +30,7 @@ pip install -r requirements.txt
 
 3. Edit the configuration file:
 
-Edit `config/app_config_placeholder.yaml` to set the paths to your video files, subtitles, scripts, and other resources, and include your OpenAI API key.
-```
+Edit `config/app_config_placeholder.yaml` to set the paths to your video files, subtitles, scripts, and other resources, and include your OpenAI API key. Rename the file to `config/app_config.yaml`.
 
 ## Data Preparation
 
