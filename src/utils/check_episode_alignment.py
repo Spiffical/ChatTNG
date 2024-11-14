@@ -11,7 +11,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 from src.playback.video_player import VideoPlayer
-from src.search.dialog_storage import DialogStorage
+from src.storage.dialog_storage import DialogStorage
 
 def check_episode_alignment(config_path: str):
     # Initialize dialog storage

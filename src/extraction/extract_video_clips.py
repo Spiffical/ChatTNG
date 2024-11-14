@@ -18,7 +18,7 @@ if project_root not in sys.path:
 change_settings({"TEMP_DIR": tempfile.gettempdir()})
 
 from src.utils.time_utils import time_to_seconds, seconds_to_time
-from src.search.dialog_storage import DialogStorage 
+from src.storage.dialog_storage import DialogStorage 
 from src.extraction.script_parser import ScriptParser
 from src.extraction.dialog_matcher import DialogMatcher
 from src.extraction.subtitle_processor import SubtitleExtractor

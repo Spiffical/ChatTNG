@@ -4,7 +4,7 @@ from typing import List, Tuple, Optional
 import os
 from pathlib import Path
 import yaml
-from src.search.dialog_storage import DialogStorage
+from src.storage.dialog_storage import DialogStorage
 from src.utils.text_utils import clean_dialog_text, split_into_sentences
 
 class DialogSearchSystem:

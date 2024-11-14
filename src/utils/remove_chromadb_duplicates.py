@@ -1,5 +1,5 @@
 import yaml
-from src.search.dialog_storage import DialogStorage
+from src.storage.dialog_storage import DialogStorage
 
 def remove_duplicate_dialogs(config_path: str):
     # Initialize storage

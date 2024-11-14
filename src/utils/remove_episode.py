@@ -7,7 +7,7 @@ project_root = str(Path(__file__).resolve().parents[2])
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from src.search.dialog_storage import DialogStorage
+from src.storage.dialog_storage import DialogStorage
 
 def remove_episode(config_path: str, season: int, episode: int):
     # Initialize storage

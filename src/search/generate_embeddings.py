@@ -5,7 +5,7 @@ from tqdm import tqdm
 import time
 import yaml
 from chromadb.utils import embedding_functions
-from dialog_storage import DialogStorage
+from src.storage.dialog_storage import DialogStorage
 from src.utils.text_utils import clean_dialog_text
 
 def generate_embeddings(config_path: str):
