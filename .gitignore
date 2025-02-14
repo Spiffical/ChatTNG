@@ -1,3 +1,91 @@
+# Environment variables
+.env
+.env.*
+!.env.*.template
+
+# AWS CDK
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+.cdk.staging
+cdk.out
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+coverage/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+data/processed/
+data/raw/
+logs/
+*.log
+migration_verification.json
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Production
+*.pem
+*.key
+*.crt
+*.cert
+
+# Secrets
+.secrets/
+.aws/
+credentials.json
+*_credentials.*
+
 .venv
 subalignerenv
 src/search/reset_and_rebuild.py
@@ -7,4 +95,14 @@ src/search/__pycache__/
 src/search/rebuild_dialog_db.py
 config/app_config.yaml
 config/logging.yaml
-**/__pycache__/
+config/prompts.yaml
+config/search_config.yaml
+venv/
+backend/config/app_config.yaml
+backend/config/prompts.yaml
+backend/config/search_config.yaml
+backend/config/settings.py
+.notes/directory_structure.md
+.notes/project_overview.md
+.notes/task_list.md
+backend/migration_progress.json

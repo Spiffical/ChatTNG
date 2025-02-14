@@ -1,6 +1,6 @@
 # ChatTNG
 
-This system extracts dialog clips from Star Trek: The Next Generation episodes by matching script text with subtitle timings, and creates an interactive dialog system powered by OpenAI's GPT models, allowing you to chat directly with the characters of Star Trek: The Next Generation.
+This system extracts dialog clips from Star Trek: The Next Generation episodes by matching script text with subtitle timings, and creates an interactive dialog system powered by Google's Gemini models, allowing you to chat directly with the characters of Star Trek: The Next Generation.
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
@@ -19,7 +19,7 @@ This system extracts dialog clips from Star Trek: The Next Generation episodes b
 - Python 3.8+
 - [FFmpeg](https://ffmpeg.org/)
 - [MPV player](https://mpv.io/)
-- [OpenAI API key](https://platform.openai.com/api-keys)
+- [Google Cloud API key](https://cloud.google.com/docs/authentication/api-keys)
 - [Alass](https://github.com/kaegi/alass) subtitle synchronization tool
 - Video files, subtitles, and episode scripts for Star Trek: TNG
 
@@ -42,7 +42,7 @@ pip install -r requirements.txt
 
 3. Edit the configuration file:
 
-Edit `config/app_config_placeholder.yaml` to set the paths to your video files, subtitles, scripts, and other resources, and include your OpenAI API key. Rename the file to `config/app_config.yaml`.
+Edit `config/app_config_placeholder.yaml` to set the paths to your video files, subtitles, scripts, and other resources, and include your Google Cloud API key. Rename the file to `config/app_config.yaml`.
 
 ## Data Preparation
 
@@ -115,18 +115,18 @@ The ChatTNG system uses a sophisticated combination of technologies to create na
 
 ### Dialog Processing
 1. **Dialog Extraction**: The system extracts dialog from episodes by matching script text with subtitle timings (see `src/extraction/dialog_matcher.py`).
-2. **Vector Database**: Dialogs are stored in ChromaDB with OpenAI embeddings, enabling semantic search capabilities.
+2. **Vector Database**: Dialogs are stored in ChromaDB with Gemini embeddings, enabling semantic search capabilities.
 3. **Character Detection**: The system automatically detects which character should respond based on context and conversation flow.
 
 ### Conversation Flow
 1. When you input text, the system:
    - Detects if a specific character should respond
-   - Generates a contextually appropriate response using GPT-4
+   - Generates a contextually appropriate response using Gemini
    - Searches the vector database for similar actual show dialog
    - Selects the best matching dialog and plays the corresponding video clip
 
 ### Technical Components
-- **Semantic Search**: Uses OpenAI's text-embedding-3-small model for creating and matching dialog embeddings
+- **Semantic Search**: Uses Google's Gemini embedding model for creating and matching dialog embeddings
 - **Context Management**: Maintains conversation history for more coherent exchanges
 - **Character Consistency**: Filters responses based on character-specific dialog patterns
 - **Dialog Deduplication**: Prevents repetition by tracking used dialogs
@@ -178,7 +178,7 @@ python src/test/test_chroma_db.py --config config/app_config.yaml
 - Make sure video files, subtitles, and scripts follow the naming convention `S01E01`
 - The system requires significant disk space for storing video clips
 - Processing all episodes can take several hours depending on your hardware
-- Keep your OpenAI API key secure and monitor usage
+- Keep your Google Cloud API key secure and monitor usage
 
 ## Troubleshooting
 

@@ -1,0 +1,142 @@
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: #e0e0e0;
+  background: #000000;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #000000;
+  position: relative;
+  overflow: hidden;
+}
+
+.star {
+  position: fixed;
+  width: 2px;
+  height: 2px;
+  background: #fff;
+  border-radius: 50%;
+  animation: starFloat cubic-bezier(0.4, 0, 1, 1) forwards;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+@keyframes starFloat {
+  0% {
+    transform: translate(var(--start-x), var(--start-y)) scale(1);
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(3);
+  }
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+/* Modern button styling */
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #001f3f;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: border-color 0.25s, background-color 0.25s;
+}
+
+button:hover {
+  border-color: #008cff;
+  background-color: #003366;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+/* Input styling */
+input, .mantine-TextInput-input {
+  background-color: #f8f9fa;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  font-size: 1rem;
+  padding: 1.2rem 1.5rem;
+  border-radius: 24px;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+input:focus, .mantine-TextInput-input:focus {
+  border-color: #008cff;
+  background-color: #ffffff;
+}
+
+/* Animation for thinking state */
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.thinking-dots {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 140, 255, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 140, 255, 0.7);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #e0e0e0;
+    background-color: #0d1b2a;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #001f3f;
+    color: #e0e0e0;
+  }
+}
