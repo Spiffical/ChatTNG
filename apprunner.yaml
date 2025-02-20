@@ -3,12 +3,12 @@ runtime: python311
 build:
   commands:
     pre-build:
+      - yum install -y openssl
       - echo "Current directory: $(pwd)"
       - echo "Listing directory contents:"
       - ls -la
     build:
-      - cd backend
-      - pip install -r requirements.txt
+      - pip install -r backend/requirements.txt
 run:
   runtime-version: 3.11.11
   command: cd backend && uvicorn main:app --host 0.0.0.0 --port 8080
