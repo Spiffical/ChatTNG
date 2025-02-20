@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: chattng
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.apprunner
+    environment:
+      - PORT=3000
+      - PYTHONPATH=/app/backend
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres123@db:5432/chattng
+      - POSTGRES_CONNECT_TIMEOUT=10
+      - POSTGRES_POOL_TIMEOUT=30
+      - POSTGRES_COMMAND_TIMEOUT=30
+      - POSTGRES_MAX_RETRIES=5
+      - POSTGRES_RETRY_INTERVAL=5
+      - DEBUG=true
+      - UVICORN_LOG_LEVEL=debug
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=debug
+      - ALEMBIC_CONFIG=/app/backend/alembic.ini
+      - FASTAPI_DEBUG=true
+      - UVICORN_RELOAD=true
+      - UVICORN_WORKERS=1
+      - CORS_ORIGINS=http://localhost:3000
+      - CORS_ALLOW_CREDENTIALS=true
+      - PROJECT_ROOT=/app
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+
+volumes:
+  postgres_data: 

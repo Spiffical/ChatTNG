@@ -12,8 +12,16 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
+# Get connection parameters from environment
+CONNECT_TIMEOUT = int(os.getenv("POSTGRES_CONNECT_TIMEOUT", "10"))
+COMMAND_TIMEOUT = int(os.getenv("POSTGRES_COMMAND_TIMEOUT", "30"))
+
 # Override sqlalchemy.url with environment variable
 config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+
+# Set connect_args in the sqlalchemy section
+config.set_section_option("sqlalchemy", "connect_args", 
+    str({"timeout": CONNECT_TIMEOUT, "command_timeout": COMMAND_TIMEOUT}))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

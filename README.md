@@ -157,20 +157,31 @@ python src/test/test_chroma_db.py --config config/app_config.yaml
 ## Project Structure
 
 ```
-.
-├── config/                 # Configuration files
-├── data/
-│   ├── raw/               # Original videos, scripts, and subtitles
-│   └── processed/         # Extracted clips and metadata
-├── src/
-│   ├── extraction/        # Video and dialog extraction
-│   ├── modes/             # Interactive and auto-dialog modes
-│   ├── playback/          # Video playback handling
-│   ├── search/            # Dialog search and matching
-│   ├── scripts/           # Utility scripts
-│   ├── test/             # Test modules
-│   └── utils/            # Helper utilities
-└── README.md
+chattng/
+├── backend/                # Backend application code
+├── frontend/              # Frontend application code
+├── docker/                # Docker configurations
+│   ├── backend/          # Backend Docker files
+│   │   ├── Dockerfile.dev
+│   │   ├── Dockerfile.prod
+│   │   └── scripts/
+│   ├── frontend/         # Frontend Docker files
+│   │   ├── Dockerfile.dev
+│   │   ├── Dockerfile.prod
+│   │   └── scripts/
+│   └── compose/          # Docker Compose files
+├── deploy/               # Deployment configurations
+│   ├── aws/             # AWS deployment
+│   │   ├── apprunner/   # App Runner configs
+│   │   ├── amplify/     # Amplify configs
+│   │   └── scripts/     # AWS deployment scripts
+│   └── local/           # Local deployment
+│       └── scripts/     # Local environment scripts
+├── env/                 # Environment configurations
+│   ├── development/    # Development environment
+│   └── production/     # Production environment
+└── infrastructure/     # Infrastructure as Code
+    └── terraform/     # Terraform configurations
 ```
 
 ## Notes

@@ -1,0 +1,23 @@
+{
+  "prod": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-chattngweb-prod-e7814-authRole",
+      "UnauthRoleArn": "arn:aws:iam::537124949081:role/amplify-chattngweb-prod-e7814-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::537124949081:role/amplify-chattngweb-prod-e7814-authRole",
+      "Region": "us-east-1",
+      "DeploymentBucketName": "amplify-chattngweb-prod-e7814-deployment",
+      "UnauthRoleName": "amplify-chattngweb-prod-e7814-unauthRole",
+      "StackName": "amplify-chattngweb-prod-e7814",
+      "StackId": "arn:aws:cloudformation:us-east-1:537124949081:stack/amplify-chattngweb-prod-e7814/fa91b510-eb0d-11ef-bcb9-127cb1162fff",
+      "AmplifyAppId": "drilt7wsd6wze"
+    },
+    "categories": {
+      "hosting": {
+        "amplifyhosting": {
+          "appId": "drilt7wsd6wze",
+          "type": "manual"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+version: 1
+applications:
+  - frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - echo "VITE_API_URL=https://j9m9ywdzb3.us-east-1.awsapprunner.com" >> .env
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+    appRoot: frontend/chattng-web 

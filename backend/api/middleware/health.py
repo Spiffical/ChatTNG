@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import psycopg2
 import pinecone
 import boto3
+import logging
 
 # Load environment variables
 env_path = Path(__file__).resolve().parents[2] / ".env"
@@ -19,6 +20,8 @@ load_dotenv(env_path)
 class HealthCheckMiddleware(BaseHTTPMiddleware):
     def __init__(self, app):
         super().__init__(app)
+        logging.basicConfig(level=logging.DEBUG)
+        self.logger = logging.getLogger(__name__)
         self.redis = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
         self.last_check = 0
         self.check_interval = 60  # Check every minute
@@ -26,6 +29,7 @@ class HealthCheckMiddleware(BaseHTTPMiddleware):
         
     def _initialize_health_status(self) -> Dict[str, Any]:
         """Initialize health status for all components"""
+        self.logger.debug("Initializing health status for components")
         return {
             "redis": {"status": "unknown", "last_check": 0},
             "postgres": {"status": "unknown", "last_check": 0},
@@ -47,13 +51,16 @@ class HealthCheckMiddleware(BaseHTTPMiddleware):
             
     async def _check_postgres(self) -> Dict[str, Any]:
         """Check PostgreSQL connection"""
+        self.logger.debug("Checking PostgreSQL connection...")
         try:
             conn = psycopg2.connect(
                 os.getenv("DATABASE_URL").replace("+asyncpg", "")
             )
             conn.close()
+            self.logger.debug("PostgreSQL connection successful")
             return {"status": "healthy", "last_check": int(time.time())}
         except Exception as e:
+            self.logger.error(f"PostgreSQL connection failed: {str(e)}")
             return {
                 "status": "unhealthy",
                 "last_check": int(time.time()),
@@ -98,10 +105,12 @@ class HealthCheckMiddleware(BaseHTTPMiddleware):
             
     async def _update_health_status(self):
         """Update health status for all components"""
+        self.logger.debug("Updating health status...")
         current_time = int(time.time())
         
         # Only check if interval has passed
         if current_time - self.last_check < self.check_interval:
+            self.logger.debug("Skipping health check - interval not passed")
             return
             
         self.health_status["redis"] = await self._check_redis()
@@ -110,13 +119,18 @@ class HealthCheckMiddleware(BaseHTTPMiddleware):
         self.health_status["s3"] = await self._check_s3()
         
         self.last_check = current_time
+        self.logger.debug(f"Health status updated: {self.health_status}")
         
     def _get_overall_status(self) -> str:
         """Get overall system health status"""
+        self.logger.debug("Getting overall status...")
         if any(v["status"] == "unhealthy" for v in self.health_status.values()):
+            self.logger.debug("Overall status: unhealthy")
             return "unhealthy"
         if any(v["status"] == "unknown" for v in self.health_status.values()):
+            self.logger.debug("Overall status: unknown")
             return "unknown"
+        self.logger.debug("Overall status: healthy")
         return "healthy"
 
     async def dispatch(
@@ -124,16 +138,21 @@ class HealthCheckMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         """Handle the request and check health status"""
         
+        self.logger.debug(f"Received request to {request.url.path}")
+        
         # Update health status periodically
         await self._update_health_status()
         
         # Return health check response for health endpoints
         if request.url.path in ["/health", "/api/health"]:
-            return JSONResponse({
+            self.logger.debug("Processing health check request")
+            response_data = {
                 "status": self._get_overall_status(),
                 "components": self.health_status,
                 "timestamp": int(time.time())
-            })
+            }
+            self.logger.debug(f"Health check response: {response_data}")
+            return JSONResponse(response_data)
             
         # Add health status to request state
         request.state.health_status = self.health_status

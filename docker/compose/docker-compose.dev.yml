@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: chattng
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: ../docker/backend/Dockerfile.dev
+    env_file: ../../env/development/.env.backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../../backend:/app/backend
+      - ../../backend/config:/app/config
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ../../frontend/chattng-web
+      dockerfile: ../../docker/frontend/Dockerfile.dev
+    env_file: ../../env/development/.env.frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../../frontend/chattng-web:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data: 

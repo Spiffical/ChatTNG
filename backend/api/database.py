@@ -12,11 +12,21 @@ DATABASE_URL = os.getenv(
     "postgresql+asyncpg://postgres:postgres@localhost:5432/chattng"
 )
 
-# Create async engine
+# Get connection parameters from environment
+CONNECT_TIMEOUT = int(os.getenv("POSTGRES_CONNECT_TIMEOUT", "10"))
+POOL_TIMEOUT = int(os.getenv("POSTGRES_POOL_TIMEOUT", "30"))
+COMMAND_TIMEOUT = int(os.getenv("POSTGRES_COMMAND_TIMEOUT", "30"))
+
+# Create async engine with connection parameters
 engine = create_async_engine(
     DATABASE_URL,
     echo=True,
-    future=True
+    future=True,
+    connect_args={
+        "timeout": CONNECT_TIMEOUT,
+        "command_timeout": COMMAND_TIMEOUT
+    },
+    pool_timeout=POOL_TIMEOUT
 )
 
 # Create async session factory

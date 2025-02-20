@@ -21,7 +21,7 @@ python -c "import sys; print('\n'.join(sys.path))"
 log "Available modules in backend:"
 ls -la /app/backend
 
-# Run database migrations
+# Run database migrations first
 cd /app/backend
 log "Running database migrations..."
 PYTHONPATH=/app/backend alembic upgrade head || {
@@ -33,15 +33,13 @@ PYTHONPATH=/app/backend alembic upgrade head || {
 log "Waiting for database to be fully ready..."
 sleep 5
 
-# Start uvicorn with development settings
+# Start uvicorn with proper module path
 cd /app/backend
 log "Starting uvicorn from $(pwd) with PYTHONPATH=$PYTHONPATH"
 exec uvicorn main:app \
     --host 0.0.0.0 \
     --port 8080 \
     --workers 1 \
-    --reload \
-    --reload-dir /app/backend \
     --log-level debug \
     --no-access-log \
     --timeout-keep-alive 75 

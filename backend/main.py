@@ -1,38 +1,97 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 import os
+import logging
+import time
+from pathlib import Path
+from dotenv import load_dotenv
 
+# Load environment variables
+env_path = Path(__file__).parent / ".env"
+load_dotenv(env_path)
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Import routes and middleware
 from api.database import init_db
-from api.routers import chat
-from api.middleware import setup_middleware
+from api.routes import chat
+from api.middleware.rate_limiter import RateLimitMiddleware
+from api.middleware.session import SessionMiddleware
 
-# Create FastAPI app
-app = FastAPI(title="ChatTNG API")
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application"""
+    
+    app = FastAPI(
+        title=os.getenv("API_TITLE", "ChatTNG API"),
+        description=os.getenv("API_DESCRIPTION", "Star Trek: TNG Dialog Chat API"),
+        version=os.getenv("API_VERSION", "1.0.0")
+    )
 
-# Create Redis connection
-redis = Redis.from_url(
-    os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-    encoding="utf-8",
-    decode_responses=True
-)
+    # Configure CORS
+    cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-# Set up middleware
-setup_middleware(app, redis)
+    # Add custom middleware in correct order
+    app.add_middleware(SessionMiddleware)  # Session must be before rate limiter
+    app.add_middleware(RateLimitMiddleware)  # Rate limiter depends on session
 
-# Include routers
-app.include_router(chat.router)
+    # Include routers
+    app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 
-@app.on_event("startup")
-async def startup():
-    """Initialize database on startup"""
-    await init_db()
+    @app.get("/health")
+    async def health_check():
+        """Basic health check endpoint"""
+        logger.debug("Received health check request at /health")
+        try:
+            # Check database connection
+            await init_db()
+            # Return healthy response
+            return {
+                "status": "healthy",
+                "timestamp": int(time.time()),
+                "environment": os.getenv("NODE_ENV", "production")
+            }
+        except Exception as e:
+            logger.error(f"Health check failed: {str(e)}")
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "status": "unhealthy",
+                    "error": str(e),
+                    "timestamp": int(time.time())
+                }
+            )
 
-@app.on_event("shutdown")
-async def shutdown():
-    """Close Redis connection on shutdown"""
-    await redis.close()
+    @app.on_event("startup")
+    async def startup():
+        """Initialize database on startup"""
+        logger.debug("Running startup event")
+        await init_db()
+        logger.debug("Database initialized")
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy"} 
+    return app
+
+app = create_app()
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler for unhandled exceptions"""
+    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "type": type(exc).__name__,
+            "message": str(exc)
+        }
+    ) 

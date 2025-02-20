@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, Request, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from datetime import datetime
@@ -15,12 +15,55 @@ from api.schemas.conversation import (
     Message,
     MessageCreate
 )
+from api.schemas.chat import (
+    ChatMessage,
+    ChatResponse,
+    ConversationHistory,
+    ShareRequest,
+    ShareResponse
+)
 from api.websockets.chat import chat_websocket_endpoint
+from api.dependencies.redis import get_redis
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+# Add new schema for chat message with history
+class ChatMessageWithHistory(ChatMessage):
+    conversation_history: Optional[List[dict]] = None
+
+@router.post("/message", response_model=ChatResponse)
+async def chat_message(
+    message: ChatMessageWithHistory,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+    redis = Depends(get_redis)
+):
+    """Handle chat message and return response with relevant clip"""
+    try:
+        # Initialize services
+        chat_service = ChatService(db, redis)
+        
+        # Get response from chat service
+        response = await chat_service.get_response(
+            message=message.content,
+            context={
+                'conversation_history': message.conversation_history if message.conversation_history else []
+            }
+        )
+        
+        return response
+
+    except Exception as e:
+        # Log the full error for debugging
+        logging.error(f"Error in chat_message: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing chat message: {str(e)}"
+        )
 
 @router.post("/conversations", response_model=Conversation)
 async def create_conversation(

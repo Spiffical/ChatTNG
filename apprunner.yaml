@@ -1,0 +1,29 @@
+version: 1.0
+runtime: python3
+build:
+  commands:
+    build:
+      - pip install -r backend/requirements.txt
+run:
+  runtime-version: 3.11.0
+  command: cd backend && uvicorn main:app --host 0.0.0.0 --port 8080
+  network:
+    port: 8080
+    env: 8080
+  env:
+    - name: PYTHONPATH
+      value: /backend
+    - name: PORT
+      value: 8080
+    - name: DEBUG
+      value: false
+    - name: FASTAPI_DEBUG
+      value: false
+    - name: UVICORN_RELOAD
+      value: false
+    - name: UVICORN_WORKERS
+      value: 2
+    - name: LOG_LEVEL
+      value: info
+    - name: UVICORN_LOG_LEVEL
+      value: info 

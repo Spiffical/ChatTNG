@@ -33,25 +33,63 @@ wheels/
 .installed.cfg
 *.egg
 
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-dist/
-coverage/
+# Virtual Environment
+venv/
+.env
+.venv
+ENV/
 
-# IDEs and editors
+# Environment files
+.env
+.env.*
+!.env.example
+!env/development/.env.*.example
+
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-*~
 
-# OS
+# Logs
+*.log
+logs/
+
+# Local development
+data/
+*.db
+*.sqlite3
+
+# AWS
+.aws/
+*.pem
+deploy_vars.env
+
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Testing
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Production
+build/
+dist/
+out/
+
+# Misc
 .DS_Store
-Thumbs.db
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Project specific
 data/processed/
@@ -86,7 +124,6 @@ coverage.xml
 credentials.json
 *_credentials.*
 
-.venv
 subalignerenv
 src/search/reset_and_rebuild.py
 data/
@@ -106,3 +143,13 @@ backend/config/settings.py
 .notes/project_overview.md
 .notes/task_list.md
 backend/migration_progress.json
+debug_share_button.txt
+frontend_complete.md
+frontend_documentation.md
+frontend_structure.md
+test_chroma.py
+.cursorrules
+test_video_cors.html
+deploy/
+aws/
+service-config.json
