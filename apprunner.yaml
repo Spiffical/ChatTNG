@@ -2,8 +2,12 @@ version: 1.0
 runtime: python311
 build:
   commands:
+    pre-build:
+      - echo "Current directory: $(pwd)"
+      - echo "Listing directory contents:"
+      - ls -la
     build:
-      - pip install -r backend/requirements.txt
+      - cd backend && pip install -r requirements.txt
 run:
   runtime-version: 3.11.11
   command: cd backend && uvicorn main:app --host 0.0.0.0 --port 8080
