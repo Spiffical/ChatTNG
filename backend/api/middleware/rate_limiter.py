@@ -1,7 +1,8 @@
+import logging
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
-import redis
+from redis.asyncio import Redis
 import time
 import json
 from typing import Optional, Dict, Any
@@ -13,84 +14,86 @@ from dotenv import load_dotenv
 env_path = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(env_path)
 
+logger = logging.getLogger(__name__)
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app):
+    def __init__(self, app, redis_url=None):
         super().__init__(app)
-        self.redis = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"))
-        self._load_config()
-        
-    def _load_config(self):
-        """Load rate limiting configuration from Redis"""
+        self.redis_url = redis_url or os.getenv("REDIS_URL")
+        self.rate_limit = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+        self.window = 60  # 1 minute window
+        self._setup_redis()
+
+    def _setup_redis(self):
+        """Setup Redis connection with fallback to in-memory tracking"""
         try:
-            # Get key prefixes
-            prefixes_json = self.redis.get("key_prefixes")
-            if not prefixes_json:
-                raise ValueError("Key prefixes not found in Redis")
-            self.prefixes = json.loads(prefixes_json)
-            
-            # Get rate limit config
-            config_json = self.redis.get("rate_limit_config")
-            if not config_json:
-                raise ValueError("Rate limit config not found in Redis")
-            self.config = json.loads(config_json)
-            
-            self.rate_limit = self.config["requests_per_minute"]
-            self.window = self.config["window_size"]
-            
+            # Check if Redis is explicitly disabled
+            redis_enabled = os.getenv("REDIS_ENABLED", "true").lower() == "true"
+            if not redis_enabled:
+                logger.info("Redis explicitly disabled by REDIS_ENABLED environment variable")
+                raise ValueError("Redis disabled via configuration")
+                
+            if not self.redis_url:
+                raise ValueError("Redis URL not configured")
+                
+            # Check if Redis URL contains placeholder
+            if "{" in self.redis_url or "}" in self.redis_url:
+                logger.warning(f"Redis URL contains placeholder: {self.redis_url}")
+                raise ValueError("Redis URL contains placeholder values")
+                
+            self.redis = Redis.from_url(self.redis_url)
+            self.use_redis = True
+            logger.info("Rate limiter using Redis")
         except Exception as e:
-            # Fallback to default values if Redis config not available
-            self.prefixes = {"rate_limit": "rl:"}
-            self.rate_limit = 60
-            self.window = 60
-            print(f"Warning: Using default rate limit config. Error: {str(e)}")
+            logger.warning(f"Failed to connect to Redis, using in-memory rate limiting: {str(e)}")
+            self.use_redis = False
+            self.in_memory_limits = {}
 
-    def _get_client_id(self, request: Request) -> str:
-        """Get unique client identifier from session or IP"""
+    async def _check_rate_limit_redis(self, client_id: str):
+        """Check rate limit using Redis"""
+        current = int(time.time())
+        window_start = current - self.window
+        
+        pipe = await self.redis.pipeline()
+        await pipe.zremrangebyscore(f"requests:{client_id}", 0, window_start)
+        await pipe.zadd(f"requests:{client_id}", {str(current): current})
+        await pipe.zcard(f"requests:{client_id}")
+        await pipe.expire(f"requests:{client_id}", self.window)
+        
         try:
-            if hasattr(request, "session") and "session_id" in request.session:
-                return request.session["session_id"]
-        except Exception:
-            pass
-        return request.client.host if request.client else "unknown"
+            _, _, request_count, _ = await pipe.execute()
+            allowed = request_count <= self.rate_limit
+            return allowed, {"remaining": self.rate_limit - request_count, "reset": self.window}
+        except Exception as e:
+            logger.error(f"Redis rate limit check failed: {str(e)}")
+            return True, {"remaining": self.rate_limit, "reset": self.window}
 
-    def _get_rate_limit_key(self, client_id: str) -> str:
-        """Generate Redis key for rate limiting"""
-        return f"{self.prefixes['rate_limit']}{client_id}"
+    def _check_rate_limit_memory(self, client_id: str):
+        """Check rate limit using in-memory storage"""
+        current = int(time.time())
+        window_start = current - self.window
+        
+        # Clean old entries
+        if client_id in self.in_memory_limits:
+            self.in_memory_limits[client_id] = [
+                ts for ts in self.in_memory_limits[client_id] 
+                if ts > window_start
+            ]
+        else:
+            self.in_memory_limits[client_id] = []
+        
+        # Add current request
+        self.in_memory_limits[client_id].append(current)
+        request_count = len(self.in_memory_limits[client_id])
+        
+        allowed = request_count <= self.rate_limit
+        return allowed, {"remaining": self.rate_limit - request_count, "reset": self.window}
 
-    async def _check_rate_limit(self, client_id: str) -> tuple[bool, Dict[str, Any]]:
-        """Check if client has exceeded rate limit using sliding window"""
-        current_time = int(time.time())
-        key = self._get_rate_limit_key(client_id)
-        window_start = current_time - self.window
-        
-        # Use Redis pipeline for atomic operations
-        pipe = self.redis.pipeline()
-        
-        # Remove old requests outside the window
-        pipe.zremrangebyscore(key, 0, window_start)
-        # Add new request
-        pipe.zadd(key, {str(current_time): current_time})
-        # Count requests in window
-        pipe.zcard(key)
-        # Set key expiry
-        pipe.expire(key, self.window * 2)  # 2x window for safety
-        
-        # Execute pipeline
-        _, _, request_count, _ = pipe.execute()
-        
-        # Calculate remaining requests and reset time
-        remaining = max(0, self.rate_limit - request_count)
-        reset_time = current_time + self.window
-        
-        # Return rate limit info
-        rate_limit_info = {
-            "limit": self.rate_limit,
-            "remaining": remaining,
-            "reset": reset_time,
-            "window": self.window
-        }
-        
-        return request_count <= self.rate_limit, rate_limit_info
+    async def _check_rate_limit(self, client_id: str):
+        """Check rate limit using either Redis or in-memory storage"""
+        if self.use_redis:
+            return await self._check_rate_limit_redis(client_id)
+        return self._check_rate_limit_memory(client_id)
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
@@ -98,11 +101,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """Handle the request and apply rate limiting"""
         
         # Skip rate limiting for health check
-        if request.url.path == "/api/health":
+        if request.url.path in ["/health", "/ping", "/debug"]:
             return await call_next(request)
 
         # Get client identifier
-        client_id = self._get_client_id(request)
+        client_id = request.client.host
         
         # Check rate limit
         allowed, rate_limit_info = await self._check_rate_limit(client_id)
@@ -124,7 +127,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         
         # Add rate limit headers to response
-        response.headers["X-RateLimit-Limit"] = str(rate_limit_info["limit"])
+        response.headers["X-RateLimit-Limit"] = str(self.rate_limit)
         response.headers["X-RateLimit-Remaining"] = str(rate_limit_info["remaining"])
         response.headers["X-RateLimit-Reset"] = str(rate_limit_info["reset"])
         

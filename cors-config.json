@@ -1,0 +1,16 @@
+{
+  "CORSRules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["GET", "HEAD"],
+      "AllowedOrigins": [
+        "https://chattng-web.vercel.app", 
+        "https://chattng.com", 
+        "https://www.chattng.com", 
+        "http://localhost:3000"
+      ],
+      "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+}

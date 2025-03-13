@@ -124,21 +124,20 @@ coverage.xml
 credentials.json
 *_credentials.*
 
+# Config files (but not settings.py)
+backend/config/app_config.yaml
+backend/config/prompts.yaml
+backend/config/search_config.yaml
+backend/config/logging.yaml
+
+# Project specific files to ignore
 subalignerenv
 src/search/reset_and_rebuild.py
 data/
 deprecated/
 src/search/__pycache__/
 src/search/rebuild_dialog_db.py
-config/app_config.yaml
-config/logging.yaml
-config/prompts.yaml
-config/search_config.yaml
 venv/
-backend/config/app_config.yaml
-backend/config/prompts.yaml
-backend/config/search_config.yaml
-backend/config/settings.py
 .notes/directory_structure.md
 .notes/project_overview.md
 .notes/task_list.md
@@ -153,3 +152,17 @@ test_video_cors.html
 deploy/
 aws/
 service-config.json
+
+# Generated config files
+railway_config.txt
+debug_info/debug_info_20250222_172030.txt
+frontend/chattng-web/amplify/cli.json
+frontend/chattng-web/amplify/README.md
+frontend/chattng-web/amplify/team-provider-info.json
+frontend/chattng-web/amplify/.config/project-config.json
+frontend/chattng-web/amplify/backend/backend-config.json
+frontend/chattng-web/amplify/backend/tags.json
+frontend/chattng-web/amplify/backend/hosting/amplifyhosting/amplifyhosting-template.json
+frontend/chattng-web/amplify/hooks/README.md
+deployment_files.txt
+video_files_contents_20250309_165904.txt

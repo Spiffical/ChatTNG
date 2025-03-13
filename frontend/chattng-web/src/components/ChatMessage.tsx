@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { Paper, Text, Stack, Group, Avatar, Box, Loader } from '@mantine/core';
+import { useState, useEffect, useRef } from 'react';
+import { Paper, Text, Stack, Group, Avatar, Box, Loader, Popover, ActionIcon } from '@mantine/core';
 import { VideoPlayer } from './VideoPlayer';
-import { IconUser, IconRobot } from '@tabler/icons-react';
+import { IconUser, IconRobot, IconInfoCircle } from '@tabler/icons-react';
+import { useDisclosure, useMediaQuery } from '@mantine/hooks';
+import { getStyles, typingIndicatorCSS } from '../styles/ChatMessageStyles';
 
 interface ClipMetadata {
   clip_path: string;
@@ -20,6 +22,8 @@ interface ChatMessageProps {
   subtitleUrl?: string;
   clipMetadata?: ClipMetadata;
   isPending?: boolean;
+  onVideoLoad?: (containerElement: HTMLElement) => void;
+  onVideoEnd?: () => void;
 }
 
 export const ChatMessage = ({
@@ -29,10 +33,17 @@ export const ChatMessage = ({
   subtitleUrl,
   clipMetadata,
   isPending,
+  onVideoLoad,
+  onVideoEnd
 }: ChatMessageProps) => {
   const isAssistant = role === 'assistant';
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [videoEnded, setVideoEnded] = useState(false);
+  const [opened, { open, close }] = useDisclosure(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useMediaQuery('(max-width: 768px)') ?? false;
+  const styles = getStyles(isMobile);
 
   // Add these debug logs
   console.log('ChatMessage props:', { role, content, clipUrl, subtitleUrl, isPending });
@@ -46,6 +57,51 @@ export const ChatMessage = ({
     // Return the full URL without modification
     return url;
   };
+  
+  // Format timestamp from seconds to MM:SS format
+  const formatTimestamp = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  // Handle mouse enter with delay
+  const handleMouseEnter = () => {
+    setIsHovered(true);
+  };
+
+  // Handle mouse leave with delay
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+  };
+
+  // Effect to handle document clicks for popover fallback
+  useEffect(() => {
+    // Only add the handler if the popover is open
+    if (opened) {
+      const handleDocumentClick = (e: MouseEvent) => {
+        // Check if the click is outside any popover content
+        const isOutsideClick = 
+          !(e.target as Element).closest('.mantine-Popover-dropdown') && 
+          !(e.target as Element).closest('.mantine-ActionIcon-root');
+          
+        if (isOutsideClick) {
+          close();
+        }
+      };
+      
+      // Add the global click handler with a slight delay to avoid conflicts
+      const timer = setTimeout(() => {
+        document.addEventListener('click', handleDocumentClick);
+      }, 100);
+      
+      // Cleanup
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener('click', handleDocumentClick);
+      };
+    }
+  }, [opened, close]);
 
   // Render thinking state for assistant
   if (isPending && isAssistant) {
@@ -56,18 +112,14 @@ export const ChatMessage = ({
         wrap="nowrap"
         justify="flex-start"
         style={{ 
-          width: '100%',
+          ...styles.messageContainer,
           flexDirection: 'row'
         }}
       >
         <Avatar
           radius="xl"
           size="md"
-          style={{
-            background: 'transparent',
-            boxShadow: 'none',
-            border: 'none'
-          }}
+          style={styles.avatar}
         >
           <IconRobot size={20} style={{ color: 'white' }} />
         </Avatar>
@@ -76,17 +128,7 @@ export const ChatMessage = ({
             shadow="sm"
             radius="lg"
             p="md"
-            style={{
-              background: 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '1rem 1.5rem',
-              minWidth: '80px',
-              minHeight: '45px',
-              border: 'none',
-              boxShadow: 'none'
-            }}
+            style={styles.typingIndicatorContainer}
           >
             <div className="typing-indicator">
               <span></span>
@@ -94,39 +136,7 @@ export const ChatMessage = ({
               <span></span>
             </div>
             <style>
-              {`
-                .typing-indicator {
-                  display: flex;
-                  gap: 6px;
-                  padding: 0.5rem;
-                  margin: 0 0.5rem;
-                }
-                
-                .typing-indicator span {
-                  width: 8px;
-                  height: 8px;
-                  background-color: #008cff;
-                  border-radius: 50%;
-                  animation: bounce 1.4s infinite ease-in-out;
-                }
-                
-                .typing-indicator span:nth-child(1) {
-                  animation-delay: -0.32s;
-                }
-                
-                .typing-indicator span:nth-child(2) {
-                  animation-delay: -0.16s;
-                }
-                
-                @keyframes bounce {
-                  0%, 80%, 100% { 
-                    transform: translateY(0);
-                  }
-                  40% { 
-                    transform: translateY(-6px);
-                  }
-                }
-              `}
+              {typingIndicatorCSS}
             </style>
           </Paper>
         </Box>
@@ -137,116 +147,167 @@ export const ChatMessage = ({
   return (
     <Group
       align="flex-start"
-      gap="md"
+      gap="2.5rem"
       wrap="nowrap"
       justify={isAssistant ? 'flex-start' : 'flex-end'}
       style={{ 
-        width: '100%',
-        padding: '0',
-        display: 'flex',
-        flexDirection: isAssistant ? 'row' : 'row-reverse',
-        position: 'relative',
-        margin: '0 0.5rem'
+        ...styles.messageContainer,
+        flexDirection: isAssistant ? 'row' : 'row-reverse'
       }}
     >
       <Avatar
         radius="xl"
         size="md"
-        style={{
-          background: 'transparent',
-          boxShadow: 'none',
-          flex: '0 0 auto',
-          position: 'relative',
-          zIndex: 1,
-          border: 'none',
-          margin: '0'
-        }}
+        style={styles.avatar}
       >
         {isAssistant ? <IconRobot size={20} style={{ color: 'white' }} /> : <IconUser size={20} />}
       </Avatar>
 
-      <Box style={{ 
-        maxWidth: isAssistant ? 'min(600px, 65%)' : '280px',
-        width: '100%',
-        display: 'flex',
-        justifyContent: isAssistant ? 'flex-start' : 'flex-end',
-        flex: '1 1 auto',
-        margin: '0',
-        position: 'relative'
-      }}>
+      <Box style={styles.messageContentBox(isAssistant)}>
         <Stack 
-          gap="xs" 
-          style={{ 
-            width: isAssistant ? '100%' : 'auto',
-            alignItems: isAssistant ? 'flex-start' : 'flex-end',
-            minWidth: '150px',
-            margin: '0'
-          }}
+          gap="2.5rem" 
+          style={styles.messageStack(isAssistant)}
         >
           {isAssistant && clipUrl ? (
-            <Box style={{ width: '100%', background: 'transparent' }}>
+            <Box 
+              className="video-container"
+              style={styles.videoContainer as any}
+              onClick={(e) => {
+                // Prevent keyboard from appearing when clicking on video container
+                if (document.activeElement instanceof HTMLElement) {
+                  document.activeElement.blur();
+                }
+                e.stopPropagation();
+              }}
+              onTouchStart={(e) => {
+                // Prevent keyboard from appearing when touching video container
+                if (document.activeElement instanceof HTMLElement) {
+                  document.activeElement.blur();
+                }
+                e.stopPropagation();
+              }}
+              ref={videoContainerRef}
+            >
               <Paper
                 radius="md"
-                style={{
-                  overflow: 'hidden',
-                  border: 'none',
-                  background: 'transparent',
-                  boxShadow: 'none'
-                }}
+                style={styles.videoPaper}
               >
                 <VideoPlayer
                   src={getProxiedUrl(clipUrl) || ''}
                   subtitleSrc={getProxiedUrl(subtitleUrl)}
                   autoplay={true}
-                  onVideoLoaded={() => setVideoLoaded(true)}
-                  onVideoEnd={() => setVideoEnded(true)}
+                  onVideoLoaded={() => {
+                    setVideoLoaded(true);
+                    if (videoContainerRef.current) {
+                      onVideoLoad?.(videoContainerRef.current);
+                    }
+                  }}
+                  onVideoEnd={() => {
+                    console.log('Video ended in ChatMessage');
+                    setVideoEnded(true);
+                    // Ensure we call onVideoEnd synchronously
+                    onVideoEnd?.();
+                  }}
                 />
                 {!videoLoaded && (
-                  <Box
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '1rem',
-                      gap: '0.5rem',
-                      background: 'transparent'
-                    }}
-                  >
+                  <Box style={styles.loadingContainer}>
                     <Loader size="xs" color="white" variant="dots" className="thinking-dots" />
                     <Text size="sm" c="dimmed">Loading clip...</Text>
                   </Box>
                 )}
               </Paper>
+              
+              {/* Info marker with popover */}
+              {clipMetadata && videoLoaded && (
+                <div 
+                  style={styles.infoIconContainer}
+                  onClick={(e) => {
+                    // Prevent keyboard from appearing when clicking on info icon
+                    if (document.activeElement instanceof HTMLElement) {
+                      document.activeElement.blur();
+                    }
+                    e.stopPropagation();
+                  }}
+                >
+                  <Popover
+                    width={300}
+                    position="right"
+                    withArrow
+                    shadow="md"
+                    opened={opened}
+                    onClose={close}
+                    trapFocus={false}
+                    closeOnEscape={true}
+                    closeOnClickOutside={true}
+                    withinPortal
+                    zIndex={2000}
+                    offset={20}
+                  >
+                    <Popover.Target>
+                      <ActionIcon
+                        variant="filled"
+                        radius="xl"
+                        size="lg"
+                        onClick={(e) => {
+                          // Prevent keyboard from appearing
+                          if (document.activeElement instanceof HTMLElement) {
+                            document.activeElement.blur();
+                          }
+                          
+                          console.log('Info icon clicked, current state:', opened);
+                          // Toggle popover state
+                          opened ? close() : open();
+                          e.stopPropagation();
+                        }}
+                        onMouseEnter={handleMouseEnter}
+                        onMouseLeave={handleMouseLeave}
+                        style={styles.infoIcon(isHovered)}
+                      >
+                        <IconInfoCircle size={20} />
+                      </ActionIcon>
+                    </Popover.Target>
+                    <Popover.Dropdown
+                      onMouseEnter={handleMouseEnter}
+                      onMouseLeave={handleMouseLeave}
+                      style={styles.popoverDropdown}
+                    >
+                      <Stack gap="xs">
+                        {clipMetadata.season && (
+                          <Box>
+                            <Text size="xs" fw={500} c="rgba(255, 255, 255, 0.7)">Season: {typeof clipMetadata.season === 'number' ? Math.floor(clipMetadata.season) : parseInt(String(clipMetadata.season), 10)}</Text>
+                          </Box>
+                        )}
+                        
+                        {clipMetadata.episode && (
+                          <Box>
+                            <Text size="xs" fw={500} c="rgba(255, 255, 255, 0.7)">Episode: {typeof clipMetadata.episode === 'number' ? Math.floor(clipMetadata.episode) : parseInt(String(clipMetadata.episode), 10)}</Text>
+                          </Box>
+                        )}
+                        
+                        {clipMetadata.character && (
+                          <Box>
+                            <Text size="xs" fw={500} c="rgba(255, 255, 255, 0.7)">Character: {clipMetadata.character}</Text>
+                          </Box>
+                        )}
+                        
+                        {clipMetadata.start_time !== undefined && clipMetadata.end_time !== undefined && (
+                          <Box>
+                            <Text size="xs" fw={500} c="rgba(255, 255, 255, 0.7)">Time: {formatTimestamp(clipMetadata.start_time)} - {formatTimestamp(clipMetadata.end_time)}</Text>
+                          </Box>
+                        )}
+                      </Stack>
+                    </Popover.Dropdown>
+                  </Popover>
+                </div>
+              )}
+              
               {videoEnded && (
                 <Text
                   size="sm"
                   mt="md"
-                  style={{
-                    fontSize: '0.9rem',
-                    marginTop: '0.75rem',
-                    marginBottom: '1rem',
-                    color: '#e0e0e0',
-                    padding: '0.75rem 1rem',
-                    background: 'transparent',
-                    borderRadius: '8px',
-                  }}
+                  style={styles.videoEndedText}
                 >
                   {content}
-                </Text>
-              )}
-              {clipMetadata && (
-                <Text
-                  size="sm"
-                  c="dimmed"
-                  mt="xs"
-                  mb="md"
-                  style={{
-                    fontSize: '0.85rem',
-                    color: 'rgba(224, 224, 224, 0.7)',
-                  }}
-                >
-                  Season {clipMetadata.season} Episode {clipMetadata.episode}
-                  {clipMetadata.character && ` - ${clipMetadata.character}`}
                 </Text>
               )}
             </Box>
@@ -254,25 +315,9 @@ export const ChatMessage = ({
             <Paper
               shadow="sm"
               radius="lg"
-              style={{
-                wordBreak: 'break-word',
-                background: isAssistant ? 'transparent' : '#008cff',
-                border: 'none',
-                borderRadius: '16px',
-                boxShadow: isAssistant ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.1)',
-                maxWidth: '100%',
-                alignSelf: isAssistant ? 'flex-start' : 'flex-end',
-                padding: '1rem 1.5rem'
-              }}
+              style={styles.textMessagePaper(isAssistant)}
             >
-              <Text
-                c={isAssistant ? '#e0e0e0' : 'white'}
-                style={{ 
-                  whiteSpace: 'pre-wrap', 
-                  fontSize: '1rem',
-                  lineHeight: '1.5'
-                }}
-              >
+              <Text style={styles.textMessageContent(isAssistant)}>
                 {content}
               </Text>
             </Paper>

@@ -21,10 +21,26 @@ class DialogStorage:
         """Initialize dialog storage with configuration"""
         self.config = config
         
-        # Initialize Pinecone with new API
-        pc = Pinecone(api_key=settings.pinecone_api_key)
-        self.index = pc.Index(settings.pinecone_index)
-        logger.debug(f"Connected to Pinecone index: {settings.pinecone_index}")
+        # Get Pinecone settings
+        pinecone_api_key = settings.pinecone_api_key
+        pinecone_env = settings.pinecone_environment
+        pinecone_index = settings.pinecone_index
+        
+        logger.debug(f"Initializing Pinecone with environment: {pinecone_env}")
+        logger.debug(f"Using index: {pinecone_index}")
+        logger.debug(f"API key present: {bool(pinecone_api_key)}")
+        
+        if not pinecone_api_key:
+            raise ValueError("Pinecone API key is not set. Please set PINECONE_API_KEY environment variable.")
+        
+        try:
+            # Initialize Pinecone with new API
+            pc = Pinecone(api_key=pinecone_api_key)
+            self.index = pc.Index(pinecone_index)
+            logger.info(f"Successfully connected to Pinecone index: {pinecone_index}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Pinecone: {str(e)}")
+            raise ValueError(f"Pinecone initialization failed: {str(e)}")
         
         # Get embedding config
         self.embedding_config = config.get("embeddings", {})
@@ -35,7 +51,15 @@ class DialogStorage:
         if self.embedding_config["provider"] == "openai":
             if "openai_api_key" not in config:
                 raise ValueError("OpenAI API key is required for OpenAI embeddings")
-            self.embedding_client = OpenAI(api_key=config["openai_api_key"])
+            
+            # Initialize OpenAI client with base configuration
+            self.embedding_client = OpenAI(
+                api_key=config["openai_api_key"],
+                base_url="https://api.openai.com/v1",  # Explicitly set the base URL
+                timeout=60.0,  # Set a reasonable timeout
+                max_retries=3  # Set max retries for robustness
+            )
+            logger.debug("Successfully initialized OpenAI client")
         else:
             raise ValueError(f"Unsupported embedding provider: {self.embedding_config['provider']}")
 

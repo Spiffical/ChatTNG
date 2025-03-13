@@ -1,0 +1,31 @@
+# Ignore everything
+*
+
+# Allow only what we need
+!backend/
+!backend/**/*
+
+# Explicitly exclude unnecessary files
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+
+# Explicitly exclude unnecessary files
+!backend/config/
+!backend/config/**/*
+!backend/config/settings.py
+!backend/config/app_config.yaml
+!backend/config/prompts.yaml
+!backend/config/search_config.yaml
+!backend/config/__init__.py
+!backend/requirements.txt
+!backend/main.py
+!backend/api/
+!backend/api/**/*
+!backend/alembic.ini
+!backend/alembic/
+!backend/alembic/**/* 

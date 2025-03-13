@@ -1,0 +1,7 @@
+*
+!backend/
+!backend/**/*
+!backend/config/app_config.yaml
+!backend/config/prompts.yaml
+!backend/config/search_config.yaml
+!backend/config/settings.py 

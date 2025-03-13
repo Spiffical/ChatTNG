@@ -42,4 +42,6 @@ exec uvicorn main:app \
     --workers 1 \
     --log-level debug \
     --no-access-log \
-    --timeout-keep-alive 75 
+    --timeout-keep-alive 75 \
+    --proxy-headers \
+    --forwarded-allow-ips '*' 

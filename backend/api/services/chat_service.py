@@ -22,20 +22,37 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class ChatService:
-    def __init__(self, db: AsyncSession, redis: Redis):
+    def __init__(self, db: AsyncSession, redis: Optional[Redis] = None):
         """Initialize chat service"""
         logger.debug("Initializing ChatService")
         self.db = db
         self.redis = redis
+        self.redis_enabled = redis is not None
+        
+        if not self.redis_enabled:
+            logger.info("Redis is disabled, caching and rate limiting will be skipped")
         
         # Get project root from environment variable
-        project_root = os.getenv('PROJECT_ROOT', '/app')  # Default to /app in Docker
+        project_root = os.getenv('PROJECT_ROOT', '/app')
         logger.debug(f"Using project root: {project_root}")
         
-        config_path = os.path.join(project_root, "config", "search_config.yaml")
+        # Ensure we don't duplicate 'backend' in the path
+        if project_root.endswith('backend'):
+            config_path = os.path.join(project_root, "config", "search_config.yaml")
+        else:
+            config_path = os.path.join(project_root, "backend", "config", "search_config.yaml")
+            
         logger.debug(f"Using config path: {config_path}")
-        self.llm = LLMInterface(config_path)
-        self.dialog_search = WebDialogSearch(config_path, redis)
+        
+        try:
+            self.llm = LLMInterface(config_path)
+            self.dialog_search = WebDialogSearch(config_path, redis)
+            logger.info("Successfully initialized LLM and dialog search")
+        except Exception as e:
+            logger.error(f"Failed to initialize chat service components: {str(e)}")
+            if "Pinecone" in str(e):
+                logger.error("Pinecone authentication failed. Please check PINECONE_API_KEY environment variable.")
+            raise ValueError(f"Chat service initialization failed: {str(e)}")
         
         # Cache settings
         self.cache_prefix = "chat_response:"
@@ -68,25 +85,52 @@ class ChatService:
                 # Get all messages except the current one
                 history_messages = [
                     msg for msg in context['conversation_history'] 
-                    if msg['content'] != message
+                    if msg['content'] != message and not msg.get('isPending', False)
                 ]
+                
+                logger.info(f"Processing conversation history with {len(history_messages)} messages")
                 
                 # Reset conversation history before adding from context
                 self.llm.conversation_history = []
                 
-                # Add all previous messages to history
-                for i in range(0, len(history_messages) - 1, 2):
-                    user_msg = history_messages[i]
-                    assistant_msg = history_messages[i + 1] if i + 1 < len(history_messages) else None
+                # Process messages in pairs, but more robustly
+                i = 0
+                pairs_added = 0
+                while i < len(history_messages):
+                    user_msg = None
+                    assistant_msg = None
                     
-                    if user_msg['role'] == 'user' and assistant_msg and assistant_msg['role'] == 'assistant':
-                        self.llm.add_to_history(
-                            user_msg['content'],
-                            assistant_msg['content'],
-                            assistant_msg.get('clip_metadata')
-                        )
+                    # Find the next user message
+                    while i < len(history_messages) and not user_msg:
+                        if history_messages[i]['role'] == 'user':
+                            user_msg = history_messages[i]
+                        i += 1
+                    
+                    # If we found a user message, look for the next assistant message
+                    if user_msg:
+                        logger.debug(f"Found user message: {user_msg['content'][:30]}...")
+                        j = i
+                        while j < len(history_messages) and not assistant_msg:
+                            if history_messages[j]['role'] == 'assistant':
+                                assistant_msg = history_messages[j]
+                                i = j + 1  # Move past this assistant message
+                                break
+                            j += 1
+                        
+                        # If we found both a user and assistant message, add them to history
+                        if assistant_msg:
+                            logger.debug(f"Found matching assistant message: {assistant_msg['content'][:30]}...")
+                            self.llm.add_to_history(
+                                user_msg['content'],
+                                assistant_msg['content'],
+                                assistant_msg.get('clip_metadata')
+                            )
+                            pairs_added += 1
+                
+                logger.info(f"Added {pairs_added} message pairs to conversation history")
             else:
                 # If no context provided, ensure history is empty
+                logger.info("No conversation history provided, starting fresh")
                 self.llm.conversation_history = []
 
             # Generate responses and get matches
@@ -139,6 +183,10 @@ class ChatService:
 
     async def _get_cached_response(self, cache_key: str) -> Optional[ChatResponse]:
         """Get cached response if available"""
+        # Skip caching if Redis is disabled
+        if not self.redis_enabled:
+            return None
+            
         try:
             cached = await self.redis.get(cache_key)
             if cached:
@@ -152,6 +200,10 @@ class ChatService:
 
     async def _cache_response(self, cache_key: str, response: ChatResponse) -> None:
         """Cache response for future use"""
+        # Skip caching if Redis is disabled
+        if not self.redis_enabled:
+            return
+            
         try:
             await self.redis.setex(
                 cache_key,
@@ -195,13 +247,17 @@ class ChatService:
 
     async def validate_rate_limit(self, session_id: str) -> bool:
         """Check if user has exceeded rate limit"""
+        # Skip rate limiting if Redis is disabled
+        if not self.redis_enabled:
+            return True
+            
         key = f"rate_limit:{session_id}"
         count = await self.redis.incr(key)
         
         if count == 1:
             await self.redis.expire(key, 60) # 1 minute window
             
-        return count <= 10 # 10 messages per minute 
+        return count <= 10 # 10 messages per minute
 
     def _get_clip_url(self, clip_path: str) -> str:
         """Convert local clip path to CloudFront URL"""

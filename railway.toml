@@ -1,0 +1,45 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "docker/backend/Dockerfile.prod"
+dockerContext = "."
+
+[deploy]
+startCommand = "/bin/sh -c 'cd /app/backend && ./start.sh'"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
+healthcheckInterval = 30
+healthcheckInitialDelay = 30
+numReplicas = 2
+
+[deploy.env]
+PYTHONPATH = "/app/backend"
+PYTHONUNBUFFERED = "1"
+PYTHONDONTWRITEBYTECODE = "1"
+NLTK_DATA = "/app/nltk_data"
+LOG_LEVEL = "INFO"
+DEBUG = "false"
+FASTAPI_DEBUG = "false"
+UVICORN_LOG_LEVEL = "INFO"
+PORT = "8080"
+UVICORN_WORKERS = "2"
+UVICORN_TIMEOUT = "120"
+REDIS_ENABLED = "true"
+RATE_LIMIT_PER_MINUTE = "1000"
+DATABASE_URL = "${POSTGRES_CONNECTION_STRING}"
+POSTGRES_CONNECT_TIMEOUT = "30"
+POSTGRES_COMMAND_TIMEOUT = "60"
+POSTGRES_MAX_RETRIES = "5"
+POSTGRES_RETRY_INTERVAL = "10"
+POSTGRES_POOL_TIMEOUT = "60"
+POSTGRES_POOL_SIZE = "20"
+POSTGRES_MAX_OVERFLOW = "30"
+
+# Security settings
+CORS_ALLOW_CREDENTIALS = "true"
+CORS_ORIGINS = "https://www.chattng.com"
+
+# Performance settings
+GZIP_MIN_SIZE = "1000"
+MAX_REQUEST_SIZE = "100MB" 

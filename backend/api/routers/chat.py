@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, Request, BackgroundTasks, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
+import json
 import logging
 
-from api.database import get_session
+from api.database import get_db
 from api.services.chat_service import ChatService
 from api.services.conversation_service import ConversationService
 from api.schemas.conversation import (
@@ -39,7 +40,7 @@ async def chat_message(
     message: ChatMessageWithHistory,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
     redis = Depends(get_redis)
 ):
     """Handle chat message and return response with relevant clip"""
@@ -68,7 +69,7 @@ async def chat_message(
 @router.post("/conversations", response_model=Conversation)
 async def create_conversation(
     conversation: ConversationCreate,
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_db)
 ):
     """Create a new conversation"""
     logger.debug(f"Creating conversation with session_id: {conversation.session_id}")
@@ -81,7 +82,7 @@ async def create_conversation(
 async def get_conversation(
     conversation_id: str,
     session_id: Optional[str] = None,
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get a conversation by ID"""
     logger.debug(f"Getting conversation {conversation_id} for session {session_id}")
@@ -100,7 +101,7 @@ async def list_conversations(
     session_id: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_db)
 ):
     """List conversations for a session"""
     logger.debug(f"Listing conversations for session {session_id}")
@@ -114,7 +115,7 @@ async def update_conversation(
     conversation_id: str,
     update_data: ConversationUpdate,
     session_id: Optional[str] = None,
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_db)
 ):
     """Update a conversation"""
     logger.debug(f"Updating conversation {conversation_id}")
@@ -135,7 +136,7 @@ async def add_message(
     message: MessageCreate,
     request: Request,
     session_id: Optional[str] = None,
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_db)
 ):
     """Add a message to a conversation"""
     logger.debug(f"Adding message to conversation {conversation_id}")
@@ -200,7 +201,7 @@ async def add_message(
 async def delete_conversation(
     conversation_id: str,
     session_id: Optional[str] = None,
-    db: AsyncSession = Depends(get_session)
+    db: AsyncSession = Depends(get_db)
 ):
     """Delete a conversation"""
     conversation_service = ConversationService(db)

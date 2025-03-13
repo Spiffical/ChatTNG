@@ -64,7 +64,15 @@ class LLMInterface:
             
         # Use absolute path for config
         if not os.path.isabs(config_path):
-            config_path = os.path.join(project_root, config_path)
+            # Check if project_root already contains 'backend'
+            if project_root.endswith('backend'):
+                config_path = os.path.join(project_root, config_path)
+            else:
+                # Check if the path already contains 'backend'
+                if 'backend' not in config_path.split(os.sep):
+                    config_path = os.path.join(project_root, "backend", config_path)
+                else:
+                    config_path = os.path.join(project_root, config_path)
             
         logger.debug(f"Loading config from: {config_path}")
         with open(config_path) as f:
@@ -135,11 +143,34 @@ class LLMInterface:
         project_root = os.getenv('PROJECT_ROOT', '/app')
         logger.debug(f"Using project root for prompts: {project_root}")
         
-        prompt_path = os.path.join(project_root, "config", "prompts.yaml")
-        logger.debug(f"Loading prompts from: {prompt_path}")
+        # Try multiple possible paths for the prompts file
+        possible_paths = [
+            os.path.join(project_root, "config", "prompts.yaml"),  # /app/config/prompts.yaml
+            os.path.join(project_root, "backend", "config", "prompts.yaml"),  # /app/backend/config/prompts.yaml
+        ]
         
-        with open(prompt_path) as f:
-            return yaml.safe_load(f)
+        for prompt_path in possible_paths:
+            logger.debug(f"Trying to load prompts from: {prompt_path}")
+            try:
+                with open(prompt_path) as f:
+                    prompts = yaml.safe_load(f)
+                    logger.info("=== Loaded Prompts ===")
+                    for key, value in prompts.items():
+                        if isinstance(value, dict) and 'system_instruction' in value:
+                            logger.info(f"\nPrompt '{key}' system instruction:\n{value['system_instruction']}")
+                        else:
+                            logger.info(f"\nPrompt '{key}':\n{value}")
+                    logger.info("=== End Prompts ===")
+                    return prompts
+            except FileNotFoundError:
+                logger.debug(f"Prompts file not found at {prompt_path}")
+                continue
+            except Exception as e:
+                logger.error(f"Error loading prompts from {prompt_path}: {e}")
+                raise
+                
+        # If we get here, we couldn't find the prompts file in any location
+        raise FileNotFoundError(f"Could not find prompts.yaml in any of these locations: {', '.join(possible_paths)}")
             
     def add_to_history(self, user_input: str, response: str, metadata: dict = None):
         """Add a dialog exchange to history with metadata"""
@@ -197,15 +228,15 @@ class LLMInterface:
 
     def generate_and_match(self, message: str) -> Tuple[str, List[Tuple[str, Dict[str, Any]]]]:
         """Generate response and find matching dialog"""
+        # First, detect if a specific character should respond
+        detected_character = self.detect_character(message)
+        self.logger.info(f"Detected character for response: {detected_character}")
+        
         # Get conversation history context including current message
         history_context = self.get_history_context(current_message=message)
         
-        # Build prompt with history (which now includes current message)
-        prompt = f"{history_context}\n\nDetect if the dialog necessitates answering as a specific character. If so, respond as that character. If not, choose any characters. In either case, generate 3 different responses that could occur in Star Trek: TNG:"
-        
-        # Generate responses and get detected character in one call
-        detected_character, responses = self._generate_response(prompt, None)
-        self.logger.info(f"Detected character for response: {detected_character}")
+        # Generate responses using the detected character
+        responses = self.generate_responses(message, detected_character, history_context)
         
         # Parse the numbered responses
         response_list = []
@@ -216,17 +247,17 @@ class LLMInterface:
                     response_list.append(response)
                 except ValueError:
                     continue
-                    
+    
         all_matches = []
-        # Find matching dialog for each response
+        # Step 1: Find 40 matching dialogs for each response
         for response in response_list:
             matches = self.search_system.find_similar_dialog(
                 query=response,
                 character=detected_character,  # Pass detected character to search system
-                n_results=40  # Get more matches initially to account for duplicates
+                n_results=40  # Get exactly 40 matches per response
             )
             
-            # Group matches by text content
+            # Step 2: Group matches by exact cleaned text content
             text_to_matches = {}
             for text, metadata in matches:
                 # Clean up character names from text
@@ -236,16 +267,15 @@ class LLMInterface:
                     text_to_matches[cleaned_text] = []
                 text_to_matches[cleaned_text].append((text, metadata))
             
-            # Randomly select one match from each group of duplicates
+            # Step 3: For each unique text, randomly select one match
             unique_matches = []
             for matches_group in text_to_matches.values():
                 unique_matches.append(random.choice(matches_group))
             
-            # Get up to 20 unique matches
-            all_matches.extend(unique_matches[:20])
+            # Step 4: Take up to 15 unique matches from each response
+            all_matches.extend(unique_matches[:15])
         
-        # Remove duplicates across all responses while preserving order
-        # First, group all matches by cleaned text content
+        # Step 5: Again group all matches by exact cleaned text content
         final_text_to_matches = {}
         for match in all_matches:
             text = match[0]
@@ -256,27 +286,161 @@ class LLMInterface:
                 final_text_to_matches[cleaned_text] = []
             final_text_to_matches[cleaned_text].append(match)
         
-        # Then randomly select one match from each group and check against used dialogs
-        final_matches = []
+        # Step 6: For each unique text, randomly select one match
+        deduplicated_matches = []
         for matches_group in final_text_to_matches.values():
             # Keep trying random matches until we find one that hasn't been used
             available_matches = [m for m in matches_group if f"{m[0]}::{m[1].get('clip_path', '')}" not in self.used_dialog_ids]
             if available_matches:
-                final_matches.append(random.choice(available_matches))
+                deduplicated_matches.append(random.choice(available_matches))
             else:
                 # If all matches in this group have been used, just pick a random one
-                final_matches.append(random.choice(matches_group))
+                deduplicated_matches.append(random.choice(matches_group))
         
-        # Return all unique matches (up to 60 total), with cleaned text for LLM selection
-        cleaned_final_matches = []
-        for match in final_matches[:60]:
+        # Step 7: Extract all previous assistant responses for filtering
+        previous_responses = set()
+        if self.conversation_history:
+            for entry in self.conversation_history:
+                if entry.get('assistant'):
+                    # Clean the response text for comparison
+                    cleaned_response = self._clean_character_names(entry['assistant'])
+                    previous_responses.add(cleaned_response)
+        
+        # Step 8: Filter out any matches that exactly match previous responses
+        final_matches = []
+        for match in deduplicated_matches:
             text, metadata = match
-            # Clean up character names from text
             cleaned_text = self._clean_character_names(text)
-            cleaned_final_matches.append((cleaned_text, metadata))
             
-        return responses, cleaned_final_matches
+            # Skip this match if it exactly matches any previous response
+            if cleaned_text in previous_responses:
+                continue
+            
+            final_matches.append((cleaned_text, metadata))
         
+        # Return all unique matches (up to 60 total)
+        return responses, final_matches[:60]
+
+    def detect_character(self, message: str) -> str:
+        """Detect if the message implies a response from a specific character"""
+        try:
+            # Get conversation history context including current message
+            history_context = self.get_history_context(current_message=message)
+            
+            # Build prompt with history
+            prompt = f"""Based on the following conversation history and only based on direct addressing to specific characters in the DIALOG (not responses), determine if a specific character should respond:
+
+{history_context}
+
+Remember to respond ONLY with the character name in uppercase, or "NONE" if no specific character is implied."""
+            
+            self.logger.info("\n=== Character Detection Debug ===")
+            self.logger.info(f"Character detection prompt: {prompt}")
+            
+            # Wrap the API call with retry logic
+            response = retry_gemini_call(
+                self.character_detection_model.generate_content,
+                prompt
+            ).text.strip().upper()
+            
+            self.logger.info(f"Raw character detection response: {response}")
+            
+            # Validate the response
+            valid_characters = ["PICARD", "DATA", "RIKER", "WORF", "TROI", "CRUSHER", 
+                               "LAFORGE", "WESLEY", "GUINAN", "Q", "TASHA", "COMPUTER", "NONE"]
+            
+            # Extract just the character name if there's additional text
+            for character in valid_characters:
+                if character in response:
+                    response = character
+                    break
+            
+            # If response is not a valid character, return empty string
+            if response not in valid_characters:
+                self.logger.warning(f"Invalid character detection response: {response}")
+                return ""
+            
+            # Return empty string if NONE was detected
+            if response == "NONE":
+                return ""
+                
+            self.logger.info(f"Final detected character: {response}")
+            self.logger.info("=== End Character Detection Debug ===\n")
+            
+            return response
+                
+        except Exception as e:
+            self.logger.error(f"Error detecting character: {e}", exc_info=True)
+            return ""
+
+    def generate_responses(self, message: str, character_name: str, history_context: str) -> str:
+        """Generate four responses to the message"""
+        try:
+            # Build prompt with history and character information
+            character_info = f"Generate responses as {character_name}." if character_name else "Generate general responses that could be from any character."
+            
+            prompt = f"""{history_context}
+
+{character_info}
+Based on the conversation history and the last message, generate 4 different responses that could occur in Star Trek: TNG, numbered 1-4. Make them with different tones: 1. comedic, 2. serious, 3. philosophical, 4. emotional."""
+            
+            self.logger.info("\n=== Response Generation Debug ===")
+            self.logger.info(f"Response generation prompt: {prompt}")
+            
+            # Wrap the API call with retry logic
+            response = retry_gemini_call(
+                self.dialog_model.generate_content,
+                prompt
+            ).text
+            
+            self.logger.info(f"Raw response generation response: {response}")
+            
+            # Process responses to ensure proper numbering and format
+            lines = [line.strip() for line in response.strip().split('\n') if line.strip()]
+            formatted_responses = []
+            
+            for line in lines:
+                # Check if line starts with a number followed by period
+                if line and line[0].isdigit() and '. ' in line:
+                    formatted_responses.append(line)
+                # Otherwise, add it to the previous response or create a new one
+                elif formatted_responses:
+                    formatted_responses[-1] += " " + line
+                else:
+                    formatted_responses.append(f"1. {line}")
+            
+            # Ensure we have exactly 4 responses
+            while len(formatted_responses) < 4:
+                if formatted_responses:
+                    # Try to extract the content of the first response
+                    if '. ' in formatted_responses[0]:
+                        first_content = formatted_responses[0].split('. ', 1)[1]
+                    else:
+                        first_content = formatted_responses[0]
+                    formatted_responses.append(f"{len(formatted_responses) + 1}. {first_content}")
+                else:
+                    formatted_responses.append(f"{len(formatted_responses) + 1}. I'm not sure how to respond to that.")
+            
+            # Ensure responses are properly numbered
+            for i in range(len(formatted_responses)):
+                if '. ' in formatted_responses[i]:
+                    _, content = formatted_responses[i].split('. ', 1)
+                    formatted_responses[i] = f"{i+1}. {content}"
+                else:
+                    formatted_responses[i] = f"{i+1}. {formatted_responses[i]}"
+            
+            # Trim to exactly 4 responses
+            formatted_responses = formatted_responses[:4]
+            
+            self.logger.info(f"Final formatted responses:\n" + "\n".join(formatted_responses))
+            self.logger.info("=== End Response Generation Debug ===\n")
+            
+            return '\n'.join(formatted_responses)
+                
+        except Exception as e:
+            self.logger.error(f"Error generating responses: {e}", exc_info=True)
+            return "1. I apologize, but I'm having trouble generating a response.\n2. Could you please try rephrasing your message?\n3. Let me try to find a relevant dialog.\n4. Perhaps we can discuss something else."
+
     def select_best_match(self, message: str, matches: List[Tuple[str, Dict[str, Any]]]) -> int:
         """Select best matching dialog using LLM"""
         if not matches:
@@ -298,7 +462,8 @@ class LLMInterface:
 Available responses:
 {chr(10).join(f"{i+1}. {text}" for i, text in enumerate(match_texts))}
 
-Select the response number that best responds to the user's message and would create the most natural conversation. Prefer responses that address the user's message directly and don't ask a question, unless the question adds to the conversation. Choose a number between 1 and {len(matches)}."""
+Select the response number that best responds to the user's message and would create the most natural conversation. Prefer responses that address the user's message directly and don't ask a question, unless the question adds to the conversation. 
+Do NOT choose a response that is identical to any message in the conversation history. Choose a number between 1 and {len(matches)}."""
         
         # Log the prompt
         self.logger.info("\n=== Dialog Selection Prompt ===")
@@ -406,73 +571,43 @@ Select the response number that best responds to the user's message and would cr
         
         return self.prompts['auto_dialog']['prompt']
 
-    def _generate_response(self, user_input: str, character_name: str) -> Tuple[str, str]:
-        """Generate multiple responses to user input and detect character if not provided"""
+    def generate_response(self, message: str, character_name: str = None) -> Tuple[str, str]:
+        """Generate a response to the message"""
         try:
-            # Get appropriate prompt based on character (only if explicitly provided)
-            character_prompt = self._get_character_prompt(character_name) if character_name else self._get_auto_dialog_prompt()
+            # Get conversation history context including current message
+            history_context = self.get_history_context(current_message=message)
             
-            # Create the full prompt
-            prompt = f"{character_prompt}\n\n{user_input}"
+            # Generate responses using the detected character
+            responses = self.generate_responses(message, character_name, history_context)
             
-            self.logger.info(f"Generate Responses Prompt:\n{prompt}")
-            
-            # Wrap the API call with retry logic
-            response = retry_gemini_call(
-                self.dialog_model.generate_content,
-                prompt
-            ).text
-            
-            self.logger.debug(f"Raw model response:\n{response}")
-            
-            # Parse the response to get character and responses
-            lines = [line.strip() for line in response.strip().split('\n') if line.strip()]
-            detected_character = ""
-            numbered_responses = []
-            
-            # Extract character from first line if present
-            if not lines:
-                raise ValueError("Empty response from model")
-                
-            # Look for DETECTED_CHARACTER: prefix
-            if not lines[0].startswith("DETECTED_CHARACTER:"):
-                self.logger.warning("Response missing DETECTED_CHARACTER: prefix, using default format")
-                numbered_responses = lines  # Assume all lines are responses
-            else:
-                # Extract character from the DETECTED_CHARACTER line
-                char_line = lines[0].split(":", 1)[1].strip().upper()
-                detected_character = "" if char_line == "NULL" else char_line
-                # Rest of the lines should be numbered responses
-                numbered_responses = [line for line in lines[1:] if line and not line.startswith("DETECTED_CHARACTER:")]
-            
-            # Process responses to ensure proper numbering and format
+            # Parse the numbered responses
             formatted_responses = []
-            for i, line in enumerate(numbered_responses, 1):
-                # Remove existing number if present
-                if line[0].isdigit() and '. ' in line:
-                    line = line.split('. ', 1)[1]
-                formatted_responses.append(f"{i}. {line}")
+            for line in responses.split('\n'):
+                if line.strip():
+                    try:
+                        _, response = line.split('. ', 1)
+                        formatted_responses.append(response)
+                    except ValueError:
+                        continue
             
-            # Ensure we have exactly 3 responses
-            while len(formatted_responses) < 3:
-                formatted_responses.append(f"{len(formatted_responses) + 1}. {formatted_responses[0].split('. ', 1)[1]}")
+            # Ensure we have at least one response
+            if not formatted_responses:
+                formatted_responses = ["I'm not sure how to respond to that."]
             
-            # Trim to exactly 3 responses
-            formatted_responses = formatted_responses[:3]
+            # Trim to exactly 4 responses
+            formatted_responses = formatted_responses[:4]
             
-            # Log the parsed output
-            self.logger.debug(f"Parsed character: {detected_character}")
-            self.logger.debug(f"Parsed responses:\n" + "\n".join(formatted_responses))
-            
-            # Return the appropriate character and responses
-            if not character_name and detected_character:
-                return detected_character, '\n'.join(formatted_responses)
+            # Log the final output
+            self.logger.info("=== Final Output ===")
+            self.logger.info(f"Final character: {character_name}")
+            self.logger.info(f"Final responses:\n" + "\n".join(formatted_responses))
+            self.logger.info("=== End Generate Response Debug ===\n")
             
             return character_name, '\n'.join(formatted_responses)
                 
         except Exception as e:
-            self.logger.error(f"Error generating response after retries: {e}")
-            return "", "1. I apologize, but I'm having trouble generating a response.\n2. Could you please try rephrasing your message?\n3. Let me try to find a relevant dialog."
+            self.logger.error(f"Error generating response after retries: {e}", exc_info=True)
+            return "", "1. I apologize, but I'm having trouble generating a response.\n2. Could you please try rephrasing your message?\n3. Let me try to find a relevant dialog.\n4. Perhaps we can discuss something else."
 
     def _get_dialog_id(self, text: str, metadata: Dict) -> str:
         """Create a unique identifier for a dialog using its text and clip path"""

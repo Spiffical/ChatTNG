@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { MantineProvider, createTheme } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Analytics } from "@vercel/analytics/react";
 import { ChatInterface } from './components/ChatInterface';
 import { SharedConversation } from './components/SharedConversation';
 import { useEffect } from 'react';
@@ -31,6 +32,13 @@ const theme = createTheme({
 
 export const App = () => {
   useEffect(() => {
+    console.log('App mounted, logging test:', {
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    });
     // Pre-create a pool of stars to reuse
     const starPool = Array.from({ length: 50 }, () => {
       const star = document.createElement('div');
@@ -158,6 +166,7 @@ export const App = () => {
             <Route path="/share/:shareId" element={<SharedConversation />} />
           </Routes>
         </Router>
+        <Analytics />
       </MantineProvider>
     </QueryClientProvider>
   );

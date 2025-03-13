@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Request, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, Request, HTTPException, Depends, BackgroundTasks, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 import time
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import List
+import json
+import logging
 
 from api.schemas.chat import (
     ChatMessage,
@@ -16,10 +18,8 @@ from api.schemas.chat import (
 from api.services.chat_service import ChatService
 from api.services.clip_service import ClipService
 from api.services.conversation_service import ConversationService
-from api.dependencies.database import get_db
+from api.database import get_db
 from api.dependencies.redis import get_redis
-
-import logging
 
 router = APIRouter()
 

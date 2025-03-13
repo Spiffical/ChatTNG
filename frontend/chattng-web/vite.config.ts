@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
           secure: false
         },
         '/clips': {
-          target: 'https://d2qqs9uhgc4wdq.cloudfront.net',
+          target: `https://${env.VITE_CLOUDFRONT_DOMAIN || 'd3h9bmq6ehlxbf.cloudfront.net'}`,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/clips/, '/clips'),
         }

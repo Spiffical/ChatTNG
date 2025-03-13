@@ -74,7 +74,12 @@ class DialogSearchSystem:
         cleaned_query = clean_dialog_text(query)
         
         # Get embedding for query
-        openai_client = OpenAI(api_key=self.config["openai"]["api_key"])
+        openai_client = OpenAI(
+            api_key=self.config["openai"]["api_key"],
+            base_url="https://api.openai.com/v1",  # Explicitly set the base URL
+            timeout=60.0,  # Set a reasonable timeout
+            max_retries=3  # Set max retries for robustness
+        )
         response = openai_client.embeddings.create(
             model=self.config["embeddings"]["model"],
             input=cleaned_query,

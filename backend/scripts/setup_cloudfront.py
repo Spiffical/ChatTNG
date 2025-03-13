@@ -4,11 +4,18 @@ from pathlib import Path
 import boto3
 from botocore.exceptions import ClientError
 import json
+from dotenv import load_dotenv
+import os
 
-# Add project root to Python path
-project_root = str(Path(__file__).resolve().parents[1])
-if project_root not in sys.path:
-    sys.path.append(project_root)
+# Add project root and backend to Python path
+project_root = str(Path(__file__).resolve().parents[2])
+backend_path = os.path.join(project_root, 'backend')
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
+
+# Load AWS environment variables
+aws_env_path = Path(project_root) / 'env' / 'production' / '.env.aws'
+load_dotenv(aws_env_path)
 
 from config.settings import get_settings
 
@@ -50,6 +57,9 @@ class CloudFrontSetup:
             oai_id = oai_response['CloudFrontOriginAccessIdentity']['Id']
             origin_config['Origins']['Items'][0]['S3OriginConfig']['OriginAccessIdentity'] = f'origin-access-identity/cloudfront/{oai_id}'
 
+            # Create response headers policy for CORS
+            cors_policy_id = self._create_cors_headers_policy()
+
             # Create distribution
             response = self.cloudfront_client.create_distribution(
                 DistributionConfig={
@@ -59,7 +69,16 @@ class CloudFrontSetup:
                         'TargetOriginId': f'S3-{self.s3_bucket}',
                         'ForwardedValues': {
                             'QueryString': False,
-                            'Cookies': {'Forward': 'none'}
+                            'Cookies': {'Forward': 'none'},
+                            'Headers': {
+                                'Quantity': 4,
+                                'Items': [
+                                    'Origin',
+                                    'Access-Control-Request-Headers',
+                                    'Access-Control-Request-Method',
+                                    'Accept'
+                                ]
+                            }
                         },
                         'TrustedSigners': {'Enabled': False, 'Quantity': 0},
                         'ViewerProtocolPolicy': 'redirect-to-https',
@@ -68,10 +87,11 @@ class CloudFrontSetup:
                         'MaxTTL': 31536000,  # 1 year
                         'Compress': True,
                         'AllowedMethods': {
-                            'Quantity': 2,
-                            'Items': ['GET', 'HEAD'],
+                            'Quantity': 7,
+                            'Items': ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
                             'CachedMethods': {'Quantity': 2, 'Items': ['GET', 'HEAD']}
-                        }
+                        },
+                        'ResponseHeadersPolicyId': cors_policy_id
                     },
                     'Comment': f'Distribution for {self.s3_bucket}',
                     'Enabled': True,
@@ -114,9 +134,26 @@ class CloudFrontSetup:
                 Policy=json.dumps(bucket_policy)
             )
 
-            # Save CloudFront domain to .env
+            # Configure CORS for S3 bucket
+            cors_configuration = {
+                'CORSRules': [
+                    {
+                        'AllowedHeaders': ['*'],
+                        'AllowedMethods': ['GET', 'HEAD'],
+                        'AllowedOrigins': ['https://chattng-web.vercel.app', 'http://localhost:3000'],
+                        'ExposeHeaders': ['ETag'],
+                        'MaxAgeSeconds': 3000
+                    }
+                ]
+            }
+            s3_client.put_bucket_cors(
+                Bucket=self.s3_bucket,
+                CORSConfiguration=cors_configuration
+            )
+
+            # Save CloudFront domain to .env files
             domain_name = response['Distribution']['DomainName']
-            self._update_env_file(domain_name)
+            self._update_env_files(domain_name)
 
             print(f"\nCloudFront distribution created successfully!")
             print(f"Domain Name: {domain_name}")
@@ -127,29 +164,46 @@ class CloudFrontSetup:
             print(f"Error creating CloudFront distribution: {str(e)}")
             sys.exit(1)
 
-    def _update_env_file(self, domain_name):
-        """Update .env file with CloudFront domain"""
-        env_path = Path(project_root) / '.env'
-        if not env_path.exists():
-            print("Error: .env file not found")
-            return
+    def _update_env_files(self, domain_name):
+        """Update .env files with CloudFront domain"""
+        env_files = [
+            Path(project_root) / 'env' / 'production' / '.env.frontend',
+            Path(project_root) / 'env' / 'development' / '.env.frontend'
+        ]
 
-        with open(env_path, 'r') as f:
-            lines = f.readlines()
+        for env_path in env_files:
+            if not env_path.exists():
+                print(f"Warning: {env_path} not found")
+                continue
 
-        # Update or add CLOUDFRONT_DOMAIN
-        domain_found = False
-        for i, line in enumerate(lines):
-            if line.startswith('CLOUDFRONT_DOMAIN='):
-                lines[i] = f'CLOUDFRONT_DOMAIN={domain_name}\n'
-                domain_found = True
-                break
+            with open(env_path, 'r') as f:
+                lines = f.readlines()
 
-        if not domain_found:
-            lines.append(f'\nCLOUDFRONT_DOMAIN={domain_name}\n')
+            # Update or add VITE_CLOUDFRONT_DOMAIN
+            domain_found = False
+            for i, line in enumerate(lines):
+                if line.startswith('VITE_CLOUDFRONT_DOMAIN='):
+                    lines[i] = f'VITE_CLOUDFRONT_DOMAIN={domain_name}\n'
+                    domain_found = True
+                    break
 
-        with open(env_path, 'w') as f:
-            f.writelines(lines)
+            if not domain_found:
+                lines.append(f'\nVITE_CLOUDFRONT_DOMAIN={domain_name}\n')
+
+            with open(env_path, 'w') as f:
+                f.writelines(lines)
+            print(f"Updated {env_path} with CloudFront domain")
+
+    def _create_cors_headers_policy(self):
+        """Get the AWS-managed CORS-with-preflight response headers policy"""
+        try:
+            # Use the AWS-managed CORS-with-preflight policy
+            # This is a managed policy that enables CORS with preflight requests
+            print("Using AWS-managed CORS-with-preflight policy")
+            return "60669652-455b-4ae9-85a4-c4c02393f86c"  # AWS-managed CORS-with-preflight policy ID
+        except ClientError as e:
+            print(f"Error with response headers policy: {str(e)}")
+            sys.exit(1)
 
 def main():
     setup = CloudFrontSetup()

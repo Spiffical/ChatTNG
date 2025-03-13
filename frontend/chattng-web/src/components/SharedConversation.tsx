@@ -4,6 +4,8 @@ import { notifications } from '@mantine/notifications';
 import { ChatMessage } from './ChatMessage';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { styles } from '../styles/SharedConversationStyles';
 
 interface ClipMetadata {
   clip_path: string;
@@ -22,42 +24,137 @@ interface Message {
   clip_metadata?: ClipMetadata;
 }
 
-const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:8000/api`;
-const CLOUDFRONT_DOMAIN = 'https://d2qqs9uhgc4wdq.cloudfront.net';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const CLOUDFRONT_DOMAIN = import.meta.env.VITE_CLOUDFRONT_DOMAIN || 'd3h9bmq6ehlxbf.cloudfront.net';
+
+// Function to try to detect the correct API port - keeping this for future reference
+// but simplifying the implementation
+const detectApiPort = () => {
+  // If we're on localhost, try both the API_BASE_URL and the same origin
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return [
+      API_BASE_URL,
+      `${window.location.origin}`
+    ];
+  }
+  
+  // For production, just use the configured API URL
+  return [API_BASE_URL];
+};
 
 const getClipUrl = (clipPath: string) => {
   const path = clipPath.replace('data/processed/clips/', '');
-  return `${CLOUDFRONT_DOMAIN}/clips/${path}`;
+  return `https://${CLOUDFRONT_DOMAIN}/clips/${path}`;
 };
 
 const getSubtitleUrl = (clipPath: string) => {
   const path = clipPath.replace('data/processed/clips/', '');
   const subtitlePath = path.split('.').slice(0, -1).join('.') + '.srt';
-  return `${CLOUDFRONT_DOMAIN}/clips/${subtitlePath}`;
+  return `https://${CLOUDFRONT_DOMAIN}/clips/${subtitlePath}`;
 };
 
 export const SharedConversation = () => {
   const { shareId } = useParams();
 
+  // Simplified logging without creating debug element
+  useEffect(() => {
+    console.log('Loading shared conversation:', {
+      shareId,
+      origin: window.location.origin
+    });
+  }, [shareId]);
+
   const { data: conversation, isLoading, error } = useQuery({
     queryKey: ['shared-conversation', shareId],
     queryFn: async () => {
-      const response = await axios.get(`${API_BASE_URL}/chat/share/${shareId}`);
-      console.log('Shared conversation data:', response.data); // Debug log
-      return response.data;
-    }
+      try {
+        // Try multiple approaches to construct the API URL
+        const possibleUrls = [];
+        
+        // Get possible API base URLs
+        const apiBaseUrls = detectApiPort();
+        
+        // Add all possible full URLs
+        for (const baseUrl of apiBaseUrls) {
+          possibleUrls.push({
+            name: `API URL: ${baseUrl}`,
+            url: `${baseUrl}/api/chat/share/${shareId}`
+          });
+        }
+        
+        // Also try a relative path as fallback
+        possibleUrls.push({
+          name: 'Relative path',
+          url: `/api/chat/share/${shareId}`
+        });
+        
+        // Try each URL in sequence
+        let lastError = null;
+        for (const { name, url } of possibleUrls) {
+          try {
+            console.log(`Attempting to fetch from ${name}: ${url}`);
+            const response = await axios.get(url);
+            console.log(`Success with ${name}`);
+            return response.data;
+          } catch (err) {
+            console.error(`Failed with ${name}:`, err);
+            lastError = err;
+          }
+        }
+        
+        // If all attempts failed, throw the last error
+        throw lastError || new Error('All API URL attempts failed');
+      } catch (err) {
+        console.error('Error fetching shared conversation:', err);
+        if (axios.isAxiosError(err)) {
+          console.error('API Error details:', {
+            status: err.response?.status,
+            statusText: err.response?.statusText,
+            data: err.response?.data,
+            config: {
+              url: err.config?.url,
+              method: err.config?.method,
+              baseURL: err.config?.baseURL
+            }
+          });
+        }
+        throw err;
+      }
+    },
+    retry: 2, // Retry failed requests up to 2 times
+    retryDelay: 1000 // Wait 1 second between retries
   });
+
+  // Store error details for display
+  const [errorDetails, setErrorDetails] = useState<string>('');
+  
+  // Update error details when error changes
+  useEffect(() => {
+    if (error) {
+      let details = 'Unknown error';
+      
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ERR_NETWORK') {
+          details = 'Network error: The API server could not be reached. It may be down or not running on the expected port.';
+        } else if (error.response) {
+          details = `Server responded with status ${error.response.status}: ${error.response.statusText}`;
+        } else {
+          details = `Request error: ${error.message}`;
+        }
+        
+        details += `\n\nRequested URL: ${error.config?.url}`;
+      } else if (error instanceof Error) {
+        details = error.message;
+      }
+      
+      setErrorDetails(details);
+      console.error('Error details:', details);
+    }
+  }, [error]);
 
   if (isLoading) {
     return (
-      <Box style={{ 
-        width: '100vw', 
-        height: '100vh', 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center',
-        background: '#001f3f'
-      }}>
+      <Box style={styles.loadingContainer}>
         <Loader color="blue" size="xl" />
       </Box>
     );
@@ -65,97 +162,70 @@ export const SharedConversation = () => {
 
   if (error) {
     notifications.show({
-      title: 'Error',
-      message: 'This conversation has expired or does not exist.',
+      title: 'Error Loading Conversation',
+      message: 'Unable to load the shared conversation. See details below.',
       color: 'red'
     });
+    
+    // Function to try to fix the URL by redirecting to the main site
+    const tryToFixUrl = () => {
+      const currentUrl = window.location.href;
+      const shareId = currentUrl.split('/').pop();
+      const mainSiteUrl = window.location.origin;
+      
+      // Redirect to the main site with a query parameter
+      window.location.href = `${mainSiteUrl}?tryShare=${shareId}`;
+    };
+    
     return (
-      <Box style={{ 
-        width: '100vw', 
-        height: '100vh', 
-        display: 'flex', 
-        flexDirection: 'column',
-        justifyContent: 'center', 
-        alignItems: 'center',
-        background: '#001f3f',
-        color: '#fff',
-        gap: '1rem'
-      }}>
-        <h2>Conversation Not Found</h2>
-        <p>This shared conversation has expired or does not exist.</p>
+      <Box style={styles.errorContainer}>
+        <h2>Unable to Load Conversation</h2>
+        <p>We couldn't load this shared conversation. This could be due to:</p>
+        <ul style={styles.errorList}>
+          <li>The conversation link has expired</li>
+          <li>The server is currently unavailable</li>
+          <li>The conversation ID is invalid or has been deleted</li>
+        </ul>
+        
+        {errorDetails && (
+          <div style={styles.errorDetails}>
+            <p>{errorDetails}</p>
+          </div>
+        )}
+        
+        <div style={styles.buttonContainer}>
+          <button 
+            onClick={tryToFixUrl}
+            style={styles.primaryButton}
+          >
+            Try to Fix
+          </button>
+          <button 
+            onClick={() => window.location.href = window.location.origin}
+            style={styles.secondaryButton}
+          >
+            Go to Home Page
+          </button>
+        </div>
       </Box>
     );
   }
 
   return (
-    <Box 
-      style={{ 
-        width: '100vw', 
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        padding: window.innerWidth <= 768 ? '0.5rem' : '1rem',
-        position: 'relative',
-        zIndex: 1,
-        overflow: 'hidden'
-      }}
-    >
-      <Box 
-        style={{ 
-          width: '100%', 
-          maxWidth: '1000px',
-          height: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'relative',
-          marginTop: window.innerWidth <= 768 ? '0.5rem' : '1rem'
-        }}
-      >
+    <Box style={styles.mainContainer}>
+      <Box style={styles.chatContainer}>
         {/* Header */}
-        <Box 
-          p="lg" 
-          style={{ 
-            background: 'rgba(0, 31, 63, 0.6)',
-            borderRadius: window.innerWidth <= 768 ? '15px' : '20px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-            height: window.innerWidth <= 768 ? '80px' : '100px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            marginBottom: window.innerWidth <= 768 ? '1rem' : '2rem',
-            position: 'relative',
-            zIndex: 2,
-            marginTop: window.innerWidth <= 768 ? '15px' : '30px'
-          }}
-        >
+        <Box p="lg" style={styles.header}>
           <Image
             src="/images/chatTNGlogo.png"
             alt="ChatTNG Logo"
-            style={{
-              height: window.innerWidth <= 768 ? '100px' : '140px',
-              width: 'auto',
-              objectFit: 'contain',
-              filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))',
-              position: 'absolute',
-              top: window.innerWidth <= 768 ? '-30px' : '-40px'
-            }}
+            style={styles.logo}
           />
         </Box>
 
         {/* Messages */}
-        <Box
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            marginBottom: '2rem',
-            paddingRight: '4px'
-          }}
-        >
-          <Stack gap="xl" p="xl" style={{ padding: window.innerWidth <= 768 ? '0 1rem' : '0 1.5rem' }}>
+        <Box style={styles.messagesArea}>
+          <Stack gap="xl" p="xl" style={styles.messagesStack}>
             {conversation?.messages.map((message: Message, index: number) => (
               <>
                 {message.message && (

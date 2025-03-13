@@ -78,7 +78,8 @@ class ClipService:
                         'ContentType': 'video/mp4',
                         'CacheControl': 'max-age=31536000',  # 1 year cache
                         'AcceptRanges': 'bytes',  # Explicitly support range requests
-                        'ContentDisposition': 'inline',  # Better streaming behavior
+                        'ContentDisposition': 'inline',  # Force inline display
+                        'x-amz-meta-download-disabled': 'true',  # Custom metadata to indicate download is disabled
                     }
                 )
             

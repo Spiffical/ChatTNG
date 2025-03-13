@@ -48,3 +48,57 @@ export default tseslint.config({
   },
 })
 ```
+
+## Mobile Testing Guide
+
+### Local Testing with Browser DevTools
+1. Chrome/Edge:
+   - Open Developer Tools (F12)
+   - Click the "Toggle Device Toolbar" icon (or Ctrl+Shift+M)
+   - Select a device from the dropdown (e.g., iPhone 12, Galaxy S20)
+   - Test interactions in this simulated environment
+
+2. Firefox:
+   - Open Developer Tools (F12)
+   - Click the "Responsive Design Mode" icon (or Ctrl+Shift+M)
+   - Select device dimensions from the presets
+
+### Cloud-Based Testing (Real Devices)
+For testing on actual iOS devices without owning hardware:
+
+1. **BrowserStack**: 
+   - Sign up for a free trial at [BrowserStack](https://www.browserstack.com/)
+   - Choose Live testing for interactive sessions or App Automate for automated tests
+   - Access real iOS devices for accurate testing
+   - Use the following command to test with BrowserStack:
+   ```
+   # If running locally
+   npm run dev 
+   
+   # Then share your local app using:
+   npx browserstack-cypress run --local
+   ```
+
+2. **LambdaTest**:
+   - Sign up for a free trial at [LambdaTest](https://www.lambdatest.com/)
+   - Similar functionality to BrowserStack with its own set of iOS devices
+
+### Physical Device Testing via Network
+If friends have iOS devices, you can easily share your development app:
+1. Ensure your computer and their device are on the same network
+2. Find your local IP address using `ipconfig` (Windows) or `ifconfig` (Mac/Linux)
+3. Update the dev script in package.json:
+   ```json
+   "scripts": {
+     "dev": "vite --host",
+     ...
+   }
+   ```
+4. Run `npm run dev` and share the network URL with friends
+
+### Debugging iOS-Specific Issues
+Common iOS issues to check:
+- Safari-specific CSS issues
+- Touch event handling differences
+- iOS PWA/homescreen compatibility
+- Mobile Safari viewport quirks

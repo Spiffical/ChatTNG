@@ -170,6 +170,17 @@ class ConversationService:
         if not share:
             return None
             
+        # Update the expiration date to extend for another 7 days from now
+        # This implements the "7 days after last access" functionality
+        new_expires_at = datetime.utcnow() + timedelta(days=7)
+        update_stmt = update(SharedConversation).where(
+            SharedConversation.id == share_id
+        ).values(
+            expires_at=new_expires_at
+        )
+        await self.db.execute(update_stmt)
+        await self.db.commit()
+            
         # Get conversation
         stmt = select(Conversation).where(
             Conversation.id == share.conversation_id

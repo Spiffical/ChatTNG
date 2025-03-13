@@ -19,8 +19,8 @@ services:
 
   app:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.apprunner
+      context: ../../backend
+      dockerfile: ../../docker/backend/Dockerfile.prod
     environment:
       - PORT=3000
       - PYTHONPATH=/app/backend

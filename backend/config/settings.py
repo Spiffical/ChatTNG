@@ -3,6 +3,10 @@ from typing import List, Optional
 from functools import lru_cache
 import os
 from pathlib import Path
+import yaml
+import json
+import base64
+import sys
 
 class Settings(BaseSettings):
     """Application settings"""
@@ -12,6 +16,11 @@ class Settings(BaseSettings):
     api_description: str = "Star Trek: TNG Dialog Chat API"
     api_version: str = "1.0.0"
     debug: bool = False
+
+    # Configurations
+    app_config: dict = {}
+    prompts_config: dict = {}
+    search_config: dict = {}
 
     # CORS Settings
     cors_origins: List[str] = ["http://localhost:3000"]
@@ -56,6 +65,34 @@ class Settings(BaseSettings):
     project_root: str = "/app"  # Docker container path
 
     def __init__(self, **kwargs):
+        # Load configurations
+        config_dir = Path(__file__).parent
+        
+        # Load configurations from files or environment variables
+        kwargs["app_config"] = load_yaml_or_env(
+            config_dir / "app_config.yaml",
+            "APP_CONFIG",
+            default={}
+        )
+        
+        kwargs["prompts_config"] = load_yaml_or_env(
+            config_dir / "prompts.yaml",
+            "PROMPTS_CONFIG",
+            default={}
+        )
+        
+        kwargs["search_config"] = load_yaml_or_env(
+            config_dir / "search_config.yaml",
+            "SEARCH_CONFIG",
+            default={}
+        )
+        
+        # Debug print current directory and contents
+        print(f"Current directory: {os.getcwd()}")
+        print(f"Backend directory: {config_dir}")
+        print(f"Directory contents: {os.listdir(config_dir)}")
+        print(f"Python path: {sys.path}")
+        
         # Debug print
         print(f"Looking for .env file in: {os.getcwd()}")
         print(f"Environment variables:")
@@ -85,7 +122,44 @@ class Settings(BaseSettings):
         extra="allow"
     )
 
-@lru_cache()
-def get_settings() -> Settings:
-    """Get cached settings instance"""
+def load_yaml_or_env(yaml_path: str, env_var_name: str, default=None):
+    """Load configuration from either a YAML file or environment variable."""
+    if os.getenv(env_var_name):
+        # Try to load from environment variable
+        try:
+            # Check if it's base64 encoded
+            if os.getenv(f"{env_var_name}_ENCODING") == "base64":
+                config_str = base64.b64decode(os.getenv(env_var_name)).decode('utf-8')
+            else:
+                config_str = os.getenv(env_var_name)
+                
+            # Parse the YAML content
+            config_data = yaml.safe_load(config_str)
+            
+            # Write the decoded content to a file
+            try:
+                # Ensure the directory exists
+                os.makedirs(os.path.dirname(yaml_path), exist_ok=True)
+                # Write the file
+                with open(yaml_path, 'w') as f:
+                    yaml.dump(config_data, f)
+                print(f"Successfully wrote config to {yaml_path}")
+            except Exception as e:
+                print(f"Warning: Could not write config file {yaml_path}: {e}")
+            
+            return config_data
+        except Exception as e:
+            print(f"Error loading config from environment variable {env_var_name}: {e}")
+            return default
+    else:
+        # Try to load from file
+        try:
+            with open(yaml_path, 'r') as f:
+                return yaml.safe_load(f)
+        except Exception as e:
+            print(f"Error loading config from file {yaml_path}: {e}")
+            return default
+
+def get_settings():
+    """Get application settings."""
     return Settings() 

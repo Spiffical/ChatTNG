@@ -11,6 +11,22 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  
+  /* Safe area insets - fallback values */
+  --safe-area-inset-top: 0px;
+  --safe-area-inset-right: 0px;
+  --safe-area-inset-bottom: 0px;
+  --safe-area-inset-left: 0px;
+}
+
+/* Apply environment variables for safe areas if supported */
+@supports (padding: env(safe-area-inset-bottom)) {
+  :root {
+    --safe-area-inset-top: env(safe-area-inset-top);
+    --safe-area-inset-right: env(safe-area-inset-right);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom);
+    --safe-area-inset-left: env(safe-area-inset-left);
+  }
 }
 
 a {
@@ -31,6 +47,226 @@ body {
   background: #000000;
   position: relative;
   overflow: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent overscroll/bounce effects on iOS */
+html, body {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Allow scrolling in specific containers */
+#chat-messages {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* Add padding at the bottom to ensure content isn't hidden behind the input bar */
+  padding-bottom: calc(100px + var(--safe-area-inset-bottom));
+  /* Ensure the container has a higher z-index than the input area */
+  position: relative;
+  z-index: 10;
+}
+
+/* Prevent visual viewport issues on mobile browsers when address bar shows/hides */
+@supports (-webkit-touch-callout: none) {
+  .vh-fix {
+    height: -webkit-fill-available;
+  }
+}
+
+/* Visual Viewport API specific styles */
+@supports (bottom: env(safe-area-inset-bottom)) {
+  .input-area {
+    padding-bottom: env(safe-area-inset-bottom);
+    transition: transform 0.3s ease-out, position 0.3s ease-out;
+    will-change: transform, position;
+  }
+  
+  /* Ensure videos are visible above the input area */
+  .video-container {
+    z-index: 60;
+    margin-bottom: 30px;
+    transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  /* Ensure the messages container has enough padding */
+  #chat-messages {
+    padding-bottom: 200px;
+    scroll-padding-bottom: 200px;
+  }
+  
+  /* Ensure the messages end reference is visible */
+  #messagesEndRef {
+    height: 20px;
+    margin-bottom: 180px;
+  }
+}
+
+/* Firefox specific styles */
+@supports (-moz-appearance: none) {
+  /* Prevent the keyboard from pushing content up */
+  .input-area {
+    transform: translateZ(0);
+    will-change: transform, position;
+  }
+  
+  /* Ensure videos are visible above the input area */
+  .video-container {
+    z-index: 60;
+    margin-bottom: 30px;
+    /* Prevent scrolling to top when interacting with videos */
+    scroll-snap-align: center;
+  }
+  
+  /* Ensure the messages container has enough padding */
+  #chat-messages {
+    padding-bottom: 200px;
+    scroll-padding-bottom: 200px;
+    /* Prevent unwanted scrolling behavior */
+    scroll-behavior: auto !important;
+    overscroll-behavior: none;
+  }
+  
+  /* Prevent scroll to top on focus */
+  input:focus, textarea:focus, select:focus, button:focus {
+    /* Prevent browser from scrolling to focused element */
+    scroll-margin-top: 1000px;
+  }
+  
+  /* Prevent scroll to top when keyboard appears */
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    /* Prevent overscroll effects */
+    overscroll-behavior: none;
+  }
+  
+  /* Add scroll-snap to keep videos in view */
+  .video-container video {
+    scroll-snap-align: center;
+    scroll-margin-top: 100px;
+    scroll-margin-bottom: 100px;
+  }
+}
+
+/* More aggressive styling for mobile to prevent input from jumping */
+@media screen and (max-width: 768px) {
+  /* Ensure content is visible above the input area */
+  #chat-messages {
+    padding-bottom: calc(140px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Ensure the last message is fully visible */
+    scroll-padding-bottom: 160px;
+    touch-action: pan-y;
+  }
+  
+  /* Input area styling */
+  .input-area {
+    position: fixed !important;
+    bottom: env(safe-area-inset-bottom) !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 98% !important;
+    padding: 12px !important;
+    background: rgba(0, 0, 0, 0.95) !important;
+    z-index: 50 !important;
+    /* Add a box shadow to create visual separation */
+    box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.3) !important;
+    touch-action: auto !important;
+    isolation: isolate !important;
+  }
+
+  /* Mobile input specific styling */
+  .mobile-input {
+    font-size: 16px !important; /* Prevent zoom on iOS */
+    line-height: 20px !important;
+    padding: 12px !important;
+    border-radius: 20px !important;
+    -webkit-appearance: none;
+    appearance: none;
+    isolation: isolate !important;
+    position: relative !important;
+    z-index: 60 !important;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    transform: translateZ(0) !important;
+    will-change: transform !important;
+    overflow: auto !important;
+    resize: none !important;
+  }
+
+  /* iOS specific fixes */
+  @supports (-webkit-touch-callout: none) {
+    .mobile-input {
+      padding: 12px 16px !important;
+      isolation: isolate !important;
+      touch-action: pan-y !important;
+      -webkit-overflow-scrolling: touch !important;
+      overscroll-behavior: contain !important;
+      transform: translateZ(0) !important;
+      will-change: transform !important;
+      overflow: auto !important;
+      resize: none !important;
+    }
+  }
+
+  /* Make form elements easier to use on mobile */
+  textarea, button, .mantine-ActionIcon-root {
+    min-height: 46px;
+    touch-action: manipulation;
+  }
+
+  /* Firefox-specific mobile fixes */
+  @supports (-moz-appearance: none) {
+    /* Prevent scroll to top when keyboard appears */
+    #chat-messages {
+      scroll-behavior: auto !important;
+      /* Use scroll-snap to keep content in view */
+      scroll-snap-type: y proximity;
+    }
+    
+    /* Ensure the last message stays in view */
+    #messagesEndRef {
+      scroll-snap-align: end;
+      height: 30px;
+      margin-bottom: 200px;
+    }
+    
+    /* Prevent the page from scrolling to top on input focus */
+    .chat-input, .mobile-input {
+      scroll-margin-top: 1000px;
+    }
+    
+    /* Ensure videos stay in view */
+    .video-container {
+      scroll-snap-align: center;
+      scroll-margin-top: 100px;
+      scroll-margin-bottom: 100px;
+    }
+  }
+}
+
+/* Brave browser specific fixes */
+.brave-browser #chat-messages {
+  height: calc(100vh - 50px) !important;
+  min-height: calc(100vh - 50px) !important;
+  max-height: calc(100vh - 50px) !important;
+}
+
+.brave-browser .vh-fix {
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
 }
 
 .star {
